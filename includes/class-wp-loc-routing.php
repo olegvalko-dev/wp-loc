@@ -5,6 +5,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class WP_LOC_Routing {
 
     private static $current_lang = null;
+    private static $switched_lang = null;
+    private static $switch_original_lang = null;
+    private static $switch_locale_active = false;
     private const CURRENT_LANGUAGE_COOKIE = 'wp_loc_current_language';
     private const CURRENT_LOCALE_COOKIE = 'wp_loc_current_locale';
     private const WPML_CURRENT_LANGUAGE_COOKIES = [
@@ -533,6 +536,10 @@ class WP_LOC_Routing {
      * Get current language slug (the central function)
      */
     public static function get_current_lang(): string {
+        if ( self::$switched_lang !== null ) {
+            return self::$switched_lang;
+        }
+
         if ( self::$current_lang !== null ) {
             return self::$current_lang;
         }
@@ -574,6 +581,48 @@ class WP_LOC_Routing {
         }
 
         return self::$current_lang = $lang;
+    }
+
+    public static function has_switched_language(): bool {
+        return self::$switched_lang !== null;
+    }
+
+    public static function switch_language( ?string $language_code ): void {
+        $target_lang = self::normalize_language_context( $language_code );
+
+        if ( ! $target_lang ) {
+            return;
+        }
+
+        if ( self::$switch_original_lang === null ) {
+            self::$switch_original_lang = self::get_current_lang();
+        }
+
+        if ( $target_lang === self::$switch_original_lang ) {
+            self::$switched_lang = null;
+            self::$switch_original_lang = null;
+            self::$current_lang = null;
+
+            if ( self::$switch_locale_active && function_exists( 'restore_previous_locale' ) ) {
+                restore_previous_locale();
+                self::$switch_locale_active = false;
+            }
+
+            return;
+        }
+
+        if ( self::$switch_locale_active && function_exists( 'restore_previous_locale' ) ) {
+            restore_previous_locale();
+            self::$switch_locale_active = false;
+        }
+
+        self::$switched_lang = $target_lang;
+        self::$current_lang = $target_lang;
+
+        $locale = WP_LOC_Languages::get_language_locale( $target_lang );
+        if ( $locale && function_exists( 'switch_to_locale' ) && get_locale() !== $locale ) {
+            self::$switch_locale_active = (bool) switch_to_locale( $locale );
+        }
     }
 
     /**

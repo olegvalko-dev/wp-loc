@@ -24,8 +24,8 @@ includes/
   class-wp-loc-frontend.php         → Lang switcher, hreflang, canonical, html lang attr, non-translatable post type support
   class-wp-loc-menus.php            → WPML-like multilingual nav menus, menu translation groups, menu item cloning, menu assignment mapping
   class-wp-loc-menu-sync.php        → Multilingual > Tools page (tabs for WP Menus Sync, AI Translation, Config Migration)
-  class-wp-loc-options.php          → Localized WP options (blogname, page_on_front, etc.)
-  class-wp-loc-compat.php           → Third-party compatibility layer (icl_object_id, $sitepress, wpml_* filters, nav_menu/object language helpers)
+  class-wp-loc-options.php          → Localized WP options (blogname, page_on_front, custom registered options, etc.)
+  class-wp-loc-compat.php           → Third-party compatibility layer (icl_object_id, $sitepress, wpml_* filters/actions, nav_menu/object language helpers)
   class-wp-loc-acf.php              → ACF field/group translation compatibility (DB, local JSON, PHP-registered groups) + ACFML-like options post_id routing (`options_{lang}`)
   class-wp-loc-media.php            → Media attachment language assignment
   class-wp-loc-terms.php            → Taxonomy/term translations, term admin UI, term routing, duplicate slugs per language
@@ -62,6 +62,8 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **Non-translatable post types**: Posts not in `icl_translations` still work with language URL prefixes (LEFT JOIN fallback in routing and frontend filtering).
 - **Query filtering**: `WP_LOC_Frontend::filter_posts_by_language()` filters main, secondary, REST, AJAX, and Gutenberg preview `WP_Query` calls for translatable post types when `suppress_filters` is false. Do not restrict it back to only the main query; WPML-style theme queries rely on this behavior.
 - **Frontend AJAX language context**: `admin-ajax.php` is technically an admin request, but frontend AJAX handlers must use the frontend language. `WP_LOC_Routing` persists `wp_loc_current_language`, `wp_loc_current_locale`, `_icl_current_language`, and `wp-wpml_current_language` cookies, resolves language from request/cookie/referer, and switches locale on AJAX bootstrap. Do not make frontend AJAX fall back to `wp_loc_get_admin_lang()`.
+- **Runtime language switching**: `do_action( 'wpml_switch_language', $lang )` and `$sitepress->switch_lang( $lang )` must temporarily switch WP-LOC's current language and WordPress locale. This is required for background/admin flows such as payment webhooks, cron notifications, and transactional emails that render content in a user's preferred frontend language. Code that switches language is expected to switch back to the previous/default language after rendering.
+- **Localized options compatibility**: Options registered through either `wp_loc_multilingual_options` or compatible `wpml_multilingual_options` must be read per language on the frontend, frontend AJAX, and explicit runtime language-switch contexts. Admin option filtering must support standard settings pages and custom Settings submenu pages. Option lookup must try compatible language-code suffixes and internal URL-slug suffixes, so `ua` URL setups can still read legacy-compatible `*_uk` option rows.
 - **Runtime translatable detection**: Settings can merge configured post types/taxonomies with element types detected from `icl_translations`, so migrated custom post types/taxonomies continue filtering even before the admin manually saves settings.
 - **Translatable taxonomies**: Enabled from `Multilingual > Settings` and filtered via `wp_loc_translatable_taxonomies`.
 - **Term slugs**: The same term slug is allowed in different languages. Uniqueness is enforced per language, not globally.
@@ -111,9 +113,9 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` not defined). Provides:
 - `icl_object_id()`, `icl_get_languages()`, `wpml_object_id_filter()`
 - Filters: `wpml_object_id`, `wpml_current_language`, `wpml_default_language`, `wpml_active_languages`
+- Actions: `wpml_switch_language`, `wpml_set_element_language_details`, `wpml_multilingual_options`
 - Constants: `ICL_LANGUAGE_CODE`, `ICL_LANGUAGE_NAME`
 - Global `$sitepress` mock object
-- `wpml_multilingual_options` action
 - `nav_menu` handling compatible with WPML-style lookups (`icl_object_id`, `wpml_object_id`, `wpml_element_language_code`)
 - WPML-like public language APIs return compatible language codes such as `uk`; native WP-LOC URL helpers continue using configured slugs such as `ua`
 

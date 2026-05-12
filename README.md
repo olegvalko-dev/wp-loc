@@ -29,13 +29,15 @@ Lightweight multilingual plugin for WordPress.
 - **Translatable post type detection** — if compatible translation rows already exist, WP-LOC can detect translated custom post types and taxonomies and merge them into runtime settings
 - **Frontend/admin query filtering** — translatable posts are filtered by the current language for main, secondary, AJAX, REST, and Gutenberg preview `WP_Query` calls when filters are not suppressed
 - **Frontend AJAX language context** — standard `admin-ajax.php` handlers inherit the current frontend language through compatible cookies, request parameters, and referring URLs
+- **Runtime language switching** — WPML-style `wpml_switch_language` / `$sitepress->switch_lang()` calls temporarily switch WP-LOC's language and WordPress locale, so background handlers and transactional email flows can render content in a user's preferred language
 - **URL structure** — `/ua/page-slug/`, `/en/page-slug/`, default language without prefix
 - **Migrated default language** — the migration wizard preserves the legacy multilingual default language for no-prefix URLs
 - **Admin language switcher** — in the admin bar with flags, cookie-based
 - **Frontend language switcher** — `wp_loc_get_lang_switcher()`, `wp_loc_get_language_switcher_html()`, `wp_loc_the_language_switcher()` with translated post, custom post type, taxonomy, author, search, date, paginated, query-filtered, and archive URLs
 - **SEO** — frontend hreflang alternate tags for translated singular, front page, posts page, and taxonomy contexts; canonical URL fallback when no SEO plugin outputs one; proper `<html lang="">`
 - **Yoast SEO compatibility** — localized `wpseo_titles` / `wpseo_social` / `wpseo_rss` options, translated primary category resolution, copied Yoast term SEO meta for translated terms, multilingual sitemap alternate links, stripped category-base compatibility, and Yoast indexable invalidation after multilingual updates
-- **Localized options** — `blogname`, `blogdescription`, `page_on_front`, `page_for_posts` per language, including localized front page / posts page routing
+- **Localized options** — `blogname`, `blogdescription`, `page_on_front`, `page_for_posts`, plus options registered through `wp_loc_multilingual_options` or compatible `wpml_multilingual_options`, per language and with localized front page / posts page routing
+- **Custom settings page support** — localized options are displayed and saved correctly on WordPress settings pages, including custom submenu pages under Settings that register option names dynamically
 - **AI settings** — choose OpenAI / Claude / Gemini, store API keys, and enable AI translation for custom menu links during menu sync
 - **Translation workflow settings** — control automatic creation of post, term, and menu translations from **Multilingual > Settings > Content Translation**
 - **Sync policy settings** — control taxonomy sync, featured image sync, and shared post-attribute sync for translation groups
@@ -93,6 +95,14 @@ $translated_id = icl_object_id( $post_id, 'page', true, 'en' );
 
 // Register a multilingual option
 do_action( 'wp_loc_multilingual_options', 'my_custom_option' );
+
+// Compatible registration used by many existing themes/plugins
+do_action( 'wpml_multilingual_options', 'my_custom_option' );
+
+// Temporarily switch language for a background/transactional flow
+do_action( 'wpml_switch_language', 'ru' );
+$subject = get_option( 'my_custom_option' ); // reads my_custom_option_ru when available
+do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context when done
 ```
 
 ### Multilingual menus
@@ -138,6 +148,14 @@ do_action( 'wp_loc_multilingual_options', 'my_custom_option' );
 - `copy_once` container fields inherit from the source language until the translated options page stores its own value
 - Both `get_field( 'field_name', 'options' )` and `get_fields( 'options' )` resolve translated values in the current language context
 - `nav_menu` ACF fields resolve to the translated menu for the current language
+
+### Localized options and background flows
+
+- Options registered through `wp_loc_multilingual_options` and compatible `wpml_multilingual_options` are stored/read with language suffixes, for example `my_custom_option_en`, `my_custom_option_ru`, or compatible codes like `my_custom_option_uk`
+- WP-LOC reads both the internal URL slug suffix and the compatible language-code suffix, so installations that use `ua` in URLs can still read legacy-compatible `*_uk` option values
+- Custom settings pages under **Settings** receive localized values in the admin when the admin language differs from the default language
+- Frontend AJAX requests to `admin-ajax.php` use the frontend language context, so transactional option reads inside AJAX handlers do not fall back to the default language
+- Code that explicitly calls `do_action( 'wpml_switch_language', $lang )` or `$sitepress->switch_lang( $lang )` temporarily switches WP-LOC's current language and WordPress locale until it is switched back. This is useful for cron jobs, payment webhooks, and transactional emails that need to render content in a user's saved preferred language
 
 ### ACF content fields
 

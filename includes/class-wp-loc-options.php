@@ -9,6 +9,35 @@ class WP_LOC_Options {
      */
     private static $multilingual_options = [];
 
+    private static function get_language_option_suffixes( string $language ): array {
+        $compat_code = WP_LOC_DB::to_db_language_code( $language ) ?: $language;
+
+        return array_values( array_unique( array_filter( [ $compat_code, $language ] ) ) );
+    }
+
+    private static function get_primary_language_option_suffix( string $language ): string {
+        $suffixes = self::get_language_option_suffixes( $language );
+
+        return $suffixes[0] ?? $language;
+    }
+
+    private static function get_localized_option_value( string $option, string $language ): array {
+        global $wpdb;
+
+        foreach ( self::get_language_option_suffixes( $language ) as $suffix ) {
+            $value = $wpdb->get_var( $wpdb->prepare(
+                "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
+                $option . '_' . $suffix
+            ) );
+
+            if ( $value !== null ) {
+                return [ true, maybe_unserialize( $value ) ];
+            }
+        }
+
+        return [ false, null ];
+    }
+
     private static function is_valid_localized_page_option_value( string $option, $value ): bool {
         if ( ! in_array( $option, [ 'page_on_front', 'page_for_posts' ], true ) ) {
             return true;
@@ -73,8 +102,11 @@ class WP_LOC_Options {
      * Filter pre_option to return localized value on frontend
      */
     public function filter_pre_option( $pre_option, string $option, $default ) {
-        // Only on frontend, skip REST and admin
-        if ( is_admin() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+        // Only on frontend, skip REST and real admin screens. Frontend AJAX runs through admin-ajax.php.
+        if (
+            ( is_admin() && ! WP_LOC_Routing::is_frontend_ajax_request() && ! WP_LOC_Routing::has_switched_language() )
+            || ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+        ) {
             return $pre_option;
         }
 
@@ -94,21 +126,16 @@ class WP_LOC_Options {
             return $pre_option;
         }
 
-        $localized_key = $option . '_' . $current_lang;
+        [ $has_localized_value, $localized_value ] = self::get_localized_option_value( $option, $current_lang );
 
-        global $wpdb;
-        $value = $wpdb->get_var( $wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
-            $localized_key
-        ) );
-
-        if ( $value !== null && self::is_valid_localized_page_option_value( $option, maybe_unserialize( $value ) ) ) {
-            return maybe_unserialize( $value );
+        if ( $has_localized_value && self::is_valid_localized_page_option_value( $option, $localized_value ) ) {
+            return $localized_value;
         }
 
         // Auto-resolve page IDs to their translations
         if ( in_array( $option, [ 'page_on_front', 'page_for_posts' ], true ) ) {
             // Get the default language value
+            global $wpdb;
             $default_value = $wpdb->get_var( $wpdb->prepare(
                 "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
                 $option
@@ -148,7 +175,7 @@ class WP_LOC_Options {
             return;
         }
 
-        $localized_key = $option . '_' . $admin_lang;
+        $localized_key = $option . '_' . self::get_primary_language_option_suffix( $admin_lang );
 
         $saving[ $option ] = true;
         update_option( $localized_key, $value );
@@ -167,15 +194,19 @@ class WP_LOC_Options {
         $default_lang = WP_LOC_Languages::get_default_language();
 
         foreach ( array_keys( WP_LOC_Languages::get_active_languages() ) as $lang ) {
-            $localized_key = $option . '_' . $lang;
+            $localized_key = $option . '_' . self::get_primary_language_option_suffix( $lang );
 
             if ( $lang === $default_lang ) {
-                delete_option( $localized_key );
+                foreach ( self::get_language_option_suffixes( $lang ) as $suffix ) {
+                    delete_option( $option . '_' . $suffix );
+                }
                 continue;
             }
 
             if ( $page_id <= 0 ) {
-                delete_option( $localized_key );
+                foreach ( self::get_language_option_suffixes( $lang ) as $suffix ) {
+                    delete_option( $option . '_' . $suffix );
+                }
                 continue;
             }
 
@@ -184,7 +215,9 @@ class WP_LOC_Options {
             if ( $translated_id && get_post_type( $translated_id ) === 'page' ) {
                 update_option( $localized_key, $translated_id );
             } else {
-                delete_option( $localized_key );
+                foreach ( self::get_language_option_suffixes( $lang ) as $suffix ) {
+                    delete_option( $option . '_' . $suffix );
+                }
             }
         }
     }
@@ -202,7 +235,9 @@ class WP_LOC_Options {
 
         // On settings pages — filter all multilingual options
         // On edit screens — filter only page_on_front/page_for_posts (for post status labels)
-        $is_settings = in_array( $screen->id, [ 'options-general', 'options-reading' ], true );
+        $is_settings = in_array( $screen->id, [ 'options-general', 'options-reading' ], true )
+            || $screen->parent_base === 'options-general'
+            || str_starts_with( (string) $screen->id, 'settings_page_' );
         $is_edit = ( $screen->base === 'edit' );
 
         if ( ! $is_settings && ! $is_edit ) return;
@@ -217,11 +252,11 @@ class WP_LOC_Options {
                 if ( isset( $filtering[ $option ] ) ) return $value;
                 $filtering[ $option ] = true;
 
-                $localized = get_option( $option . '_' . $admin_lang );
+                [ $has_localized_value, $localized ] = self::get_localized_option_value( $option, $admin_lang );
 
                 unset( $filtering[ $option ] );
 
-                if ( $localized !== false && $localized !== '' && self::is_valid_localized_page_option_value( $option, $localized ) ) {
+                if ( $has_localized_value && $localized !== '' && self::is_valid_localized_page_option_value( $option, $localized ) ) {
                     return $localized;
                 }
 

@@ -11,6 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class WP_LOC_Compat {
 
     private function get_internal_context_language(): string {
+        if ( WP_LOC_Routing::has_switched_language() ) {
+            return wp_loc_get_current_lang();
+        }
+
         return WP_LOC_Routing::is_frontend_ajax_request() || ! is_admin()
             ? wp_loc_get_current_lang()
             : wp_loc_get_admin_lang();
@@ -194,8 +198,7 @@ class WP_LOC_Compat {
 
         // wpml_switch_language action
         add_action( 'wpml_switch_language', function ( $language_code ) {
-            // This is a simplified version — stores switched language
-            WP_LOC_Routing::flush();
+            WP_LOC_Routing::switch_language( is_string( $language_code ) ? $language_code : null );
         } );
     }
 
@@ -414,6 +417,12 @@ class WP_LOC_Compat {
 class WP_LOC_Sitepress_Mock {
 
     public function get_current_language(): string {
+        if ( WP_LOC_Routing::has_switched_language() ) {
+            $language = wp_loc_get_current_lang();
+
+            return WP_LOC_DB::to_db_language_code( $language ) ?: $language;
+        }
+
         $language = WP_LOC_Routing::is_frontend_ajax_request() || ! is_admin()
             ? wp_loc_get_current_lang()
             : wp_loc_get_admin_lang();
@@ -428,7 +437,7 @@ class WP_LOC_Sitepress_Mock {
     }
 
     public function switch_lang( string $language_code ): void {
-        WP_LOC_Routing::flush();
+        WP_LOC_Routing::switch_language( $language_code );
     }
 
     public function get_active_languages( bool $refresh = false ): array {
