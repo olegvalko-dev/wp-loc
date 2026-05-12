@@ -122,6 +122,14 @@ class WP_LOC_Options {
         $current_lang = wp_loc_get_current_lang();
         $default_lang = WP_LOC_Languages::get_default_language();
 
+        if ( in_array( $option, [ 'page_on_front', 'page_for_posts' ], true ) ) {
+            $translated_page_option = $this->resolve_page_option_for_language( $option, $current_lang );
+
+            if ( $translated_page_option !== null ) {
+                return $translated_page_option;
+            }
+        }
+
         if ( $current_lang === $default_lang ) {
             return $pre_option;
         }
@@ -132,27 +140,38 @@ class WP_LOC_Options {
             return $localized_value;
         }
 
-        // Auto-resolve page IDs to their translations
-        if ( in_array( $option, [ 'page_on_front', 'page_for_posts' ], true ) ) {
-            // Get the default language value
-            global $wpdb;
-            $default_value = $wpdb->get_var( $wpdb->prepare(
-                "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
-                $option
-            ) );
-            if ( $default_value ) {
-                $post_type = get_post_type( (int) $default_value );
-                if ( $post_type ) {
-                    $element_type = WP_LOC_DB::post_element_type( $post_type );
-                    $translated_id = WP_LOC::instance()->db->get_element_translation( (int) $default_value, $element_type, $current_lang );
-                    if ( $translated_id ) {
-                        return $translated_id;
-                    }
-                }
-            }
+        return $pre_option;
+    }
+
+    private function resolve_page_option_for_language( string $option, string $language ): ?int {
+        global $wpdb;
+
+        [ $has_localized_value, $localized_value ] = self::get_localized_option_value( $option, $language );
+
+        if ( $has_localized_value && self::is_valid_localized_page_option_value( $option, $localized_value ) ) {
+            return (int) $localized_value;
         }
 
-        return $pre_option;
+        $raw_value = $wpdb->get_var( $wpdb->prepare(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
+            $option
+        ) );
+        $raw_page_id = (int) $raw_value;
+
+        if ( $raw_page_id <= 0 || get_post_type( $raw_page_id ) !== 'page' ) {
+            return null;
+        }
+
+        $element_type = WP_LOC_DB::post_element_type( 'page' );
+        $raw_language = WP_LOC::instance()->db->get_element_language( $raw_page_id, $element_type );
+
+        if ( ! $raw_language || $raw_language === $language ) {
+            return null;
+        }
+
+        $translated_id = WP_LOC::instance()->db->get_element_translation( $raw_page_id, $element_type, $language );
+
+        return $translated_id && get_post_type( $translated_id ) === 'page' ? (int) $translated_id : null;
     }
 
     /**
