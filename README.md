@@ -194,6 +194,7 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - Enable multilingual behavior per taxonomy in **Multilingual > Settings**
 - Term translations are stored in the `icl_translations` table as `tax_{taxonomy}` rows using `term_taxonomy_id`
 - Category, tag, and custom taxonomy archive URLs are language-aware
+- Nested hierarchical term archive paths resolve segment-by-segment in the requested language, so duplicate child slugs across languages do not collapse to the default language
 - For translatable posts, multilingual taxonomy assignments sync across the whole post translation group
 - If a translated term does not exist for the current language, the frontend switcher falls back to the language home URL
 - Wrong-language term archive URLs return `404`
@@ -201,7 +202,9 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 ## Routing Notes
 
 - Translated singular URLs resolve by language, post type, and slug, so translated posts from different post types can safely share the same slug
+- Hierarchical page paths are resolved in the requested language before WordPress fallback resolution, so translated parent/child pages can safely reuse the same slugs across languages
 - Custom post type translations with identical slugs across languages resolve to their translated post instead of redirecting back to the default-language post
+- Canonical redirects are blocked when WordPress tries to strip or replace an existing non-default language URL prefix
 - Compatibility switcher APIs such as `icl_get_languages()` use the same translated URLs as WP-LOC's native switcher helpers
 - Frontend requests persist `wp_loc_current_language`, `wp_loc_current_locale`, `_icl_current_language`, and `wp-wpml_current_language` cookies so same-origin AJAX calls to `admin-ajax.php` keep the expected language context
 

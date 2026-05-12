@@ -162,6 +162,12 @@ class WP_LOC_Routing {
         $hierarchical_post_types = get_post_types( [ 'hierarchical' => true ], 'names' );
 
         if ( ! empty( $hierarchical_post_types ) ) {
+            $language_match = $this->resolve_hierarchical_path_to_post_id( $normalized_path, $lang_slug, array_values( $hierarchical_post_types ) );
+
+            if ( $language_match ) {
+                return $language_match;
+            }
+
             $path_match = get_page_by_path( $normalized_path, OBJECT, array_values( $hierarchical_post_types ) );
 
             if ( $path_match instanceof \WP_Post ) {
@@ -213,6 +219,52 @@ class WP_LOC_Routing {
         ) );
 
         return $post_id ? (int) $post_id : null;
+    }
+
+    /**
+     * Resolve duplicate hierarchical paths by the requested language before WordPress picks a default-language page.
+     */
+    private function resolve_hierarchical_path_to_post_id( string $path, string $lang_slug, array $post_types ): ?int {
+        $parts = array_values( array_filter( explode( '/', trim( $path, '/' ) ) ) );
+
+        if ( empty( $parts ) || empty( $post_types ) ) {
+            return null;
+        }
+
+        global $wpdb;
+
+        $table = WP_LOC::instance()->db->get_table();
+        $last_slug = end( $parts );
+        $db_lang_slug = WP_LOC_DB::to_db_language_code( $lang_slug ) ?: $lang_slug;
+        $post_type_placeholders = implode( ', ', array_fill( 0, count( $post_types ), '%s' ) );
+
+        $query = $wpdb->prepare(
+            "SELECT p.ID
+             FROM {$wpdb->posts} p
+             INNER JOIN {$table} t ON t.element_id = p.ID AND t.element_type = CONCAT('post_', p.post_type)
+             WHERE p.post_name = %s
+               AND p.post_type IN ({$post_type_placeholders})
+               AND p.post_status NOT IN ('trash', 'auto-draft')
+               AND t.language_code = %s
+             ORDER BY p.ID ASC",
+            array_merge( [ $last_slug ], $post_types, [ $db_lang_slug ] )
+        );
+
+        $candidate_ids = $wpdb->get_col( $query );
+
+        foreach ( $candidate_ids as $candidate_id ) {
+            $candidate = get_post( (int) $candidate_id );
+
+            if ( ! $candidate instanceof \WP_Post || ! WP_LOC_Admin_Settings::is_translatable( $candidate->post_type ) ) {
+                continue;
+            }
+
+            if ( trim( get_page_uri( $candidate ), '/' ) === $path ) {
+                return (int) $candidate->ID;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -373,6 +425,18 @@ class WP_LOC_Routing {
             return false;
         }
 
+        if ( $redirect_url ) {
+            $requested_lang = $this->get_language_prefix_from_url( (string) $requested_url );
+
+            if ( $requested_lang ) {
+                $redirect_lang = $this->get_language_prefix_from_url( (string) $redirect_url );
+
+                if ( $redirect_lang !== $requested_lang ) {
+                    return false;
+                }
+            }
+        }
+
         if ( get_option( 'show_on_front' ) === 'page' ) {
             $current_lang = self::get_current_lang();
             $default_lang = WP_LOC_Languages::get_default_language();
@@ -397,6 +461,20 @@ class WP_LOC_Routing {
         }
 
         return $redirect_url;
+    }
+
+    private function get_language_prefix_from_url( string $url ): ?string {
+        $path = (string) wp_parse_url( $url, PHP_URL_PATH );
+        $relative_path = $this->get_request_path_relative_to_home( $path );
+        $first_segment = strtok( $relative_path, '/' );
+
+        if ( ! is_string( $first_segment ) || $first_segment === '' ) {
+            return null;
+        }
+
+        $additional_languages = WP_LOC_Languages::get_additional_languages();
+
+        return in_array( $first_segment, $additional_languages, true ) ? $first_segment : null;
     }
 
     /**

@@ -107,6 +107,15 @@ class WP_LOC_Compat {
             return $this->get_default_context_language();
         } );
 
+        // wpml_home_url
+        add_filter( 'wpml_home_url', function ( $url = '', $language_code = null ) {
+            $target_language = is_string( $language_code ) && $language_code !== ''
+                ? WP_LOC_Routing::normalize_language_context( $language_code )
+                : $this->get_internal_context_language();
+
+            return $this->build_home_url_for_language( $target_language ?: $this->get_internal_context_language() );
+        }, 10, 2 );
+
         // wpml_active_languages
         add_filter( 'wpml_active_languages', function ( $value = null ) {
             $active = WP_LOC_Languages::get_active_languages();
