@@ -2932,6 +2932,20 @@ class WP_LOC_ACF {
             return $this->map_field_value_to_language( $source_value, $field, $language );
         }
 
+        if ( $translation_mode === 'translatable' ) {
+            $source_value = null;
+
+            if ( function_exists( 'acf_get_value' ) ) {
+                $source_value = acf_get_value( $base_post_id, $field );
+            } else {
+                $source_value = get_option( "{$base_post_id}_{$field['name']}", null );
+            }
+
+            if ( $source_value !== null && $source_value !== false && $source_value !== '' ) {
+                return $this->map_field_value_to_language( $source_value, $field, $language );
+            }
+        }
+
         return $null;
     }
 
@@ -3113,8 +3127,8 @@ class WP_LOC_ACF {
                     $meta[ $field_name ] = $localized_value;
                 } elseif ( $mode === 'copy_once' && array_key_exists( $field_name, $base_meta ) ) {
                     $meta[ $field_name ] = $this->map_field_value_to_language( $base_meta[ $field_name ], $runtime_field, $language );
-                } elseif ( $mode === 'translatable' ) {
-                    unset( $meta[ $field_name ] );
+                } elseif ( $mode === 'translatable' && array_key_exists( $field_name, $base_meta ) ) {
+                    $meta[ $field_name ] = $this->map_field_value_to_language( $base_meta[ $field_name ], $runtime_field, $language );
                 }
             }
 
