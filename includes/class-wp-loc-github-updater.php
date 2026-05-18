@@ -10,8 +10,10 @@ class WP_LOC_GitHub_Updater {
 
     public function __construct() {
         add_filter( 'pre_set_site_transient_update_plugins', [ $this, 'filter_update_plugins_transient' ] );
+        add_filter( 'site_transient_update_plugins', [ $this, 'filter_update_plugins_transient' ] );
         add_filter( 'plugins_api', [ $this, 'filter_plugins_api' ], 10, 3 );
         add_filter( 'upgrader_source_selection', [ $this, 'normalize_github_source_directory' ], 11, 4 );
+        add_action( 'delete_site_transient_update_plugins', [ $this, 'clear_cached_update_data' ] );
         add_action( 'upgrader_process_complete', [ $this, 'clear_cache_after_update' ], 10, 2 );
     }
 
@@ -158,8 +160,12 @@ class WP_LOC_GitHub_Updater {
         $plugins = isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : [ $hook_extra['plugin'] ?? '' ];
 
         if ( in_array( WP_LOC_BASENAME, $plugins, true ) ) {
-            delete_site_transient( self::CACHE_KEY );
+            $this->clear_cached_update_data();
         }
+    }
+
+    public function clear_cached_update_data(): void {
+        delete_site_transient( self::CACHE_KEY );
     }
 
     private function get_remote_update_data( bool $force = false ): ?array {
