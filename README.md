@@ -51,6 +51,7 @@ Lightweight multilingual plugin for WordPress.
 - **ACF nav_menu field support** — translated menu values resolve to the correct menu in the current language context
 - **Timber integration** — Twig functions `wp_loc_language_switcher()` and `wp_loc_languages()`
 - **Activation safety** — on activation, WP-LOC deactivates known conflicting multilingual add-ons instead of deleting them
+- **GitHub updates** — native WordPress plugin updates from the public GitHub repository by comparing the remote `wp-loc.php` `Version:` header on the configured branch
 - **Ukrainian slug** — `uk` locale → `ua` URL slug out of the box
 
 ## Requirements
@@ -70,6 +71,14 @@ Lightweight multilingual plugin for WordPress.
 8. Use **Multilingual > Tools** for WP Menus Sync, the AI Translation tool, and Config Migration
 
 ## Usage
+
+### GitHub updates
+
+- WP-LOC uses the standard WordPress plugin update flow, so update checks, update notices, AJAX updates, and disabled-update hooks behave like native plugin updates
+- The updater reads `Version:` from `wp-loc.php` on the configured GitHub branch and compares it with the installed `WP_LOC_VERSION`
+- Update checks are cached in a site transient and do not ping GitHub on every admin request
+- GitHub Releases are not required; the update package is the configured branch ZIP archive
+- To publish an update, bump both the plugin header `Version:` and `WP_LOC_VERSION`, then push the branch
 
 ### In PHP templates
 ```php

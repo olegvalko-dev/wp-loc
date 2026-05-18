@@ -30,6 +30,7 @@ includes/
   class-wp-loc-media.php            → Media attachment language assignment
   class-wp-loc-terms.php            → Taxonomy/term translations, term admin UI, term routing, duplicate slugs per language
   class-wp-loc-timber.php           → Timber/Twig integration for switcher helpers
+  class-wp-loc-github-updater.php   → GitHub branch-based updater using the remote plugin header Version value
 assets/
   flags/                           → SVG country flags
   scss/admin.scss                  → SCSS source (compiled by Prepros)
@@ -52,6 +53,7 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **Admin language**: Cookie-based (`admin_lang` cookie stores WP locale).
 - **No post meta for translations**: Everything goes through `icl_translations`. No `_lang`, no `_translation_group`.
 - **Activation behavior**: `wp-loc.php` deactivates known conflicting multilingual add-ons on activation. It does not delete plugin files or database tables.
+- **GitHub updater**: `WP_LOC_GITHUB_BRANCH` points to the branch used for update checks (`master` by default). `WP_LOC_GitHub_Updater` plugs into WordPress' native plugin update transient, reads the remote `wp-loc.php` header from `vitaliikaplia/wp-loc`, compares the remote `Version:` header with `WP_LOC_VERSION`, caches checks in a site transient, and provides the branch ZIP as the update package. It does not run its own updater loop, so standard WordPress update disabling hooks still control whether updates are checked/applied.
 - **Database Optimization Wizard**: Activation sets `wp_loc_db_optimization_wizard_status` to `pending`. The wizard opens for admins until completed or dismissed, has scan/apply/dismiss AJAX endpoints, imports compatible languages/display names/switcher display names, adopts existing `icl_translations` links, imports detected translatable post types/taxonomies into WP-LOC settings, and removes obsolete service data only after explicit confirmation.
 - **Wizard default language import**: The wizard reads the legacy multilingual default language from stored sitepress settings and writes it to `wp_loc_default_language` after language mapping is applied, so the no-prefix URL language matches the migrated site.
 - **Wizard language mapping**: Scan output includes detected source languages, normalized target languages, match confidence, and `language_targets`. Apply accepts `language_mapping` JSON and validates that mapped target languages are valid and unique before changing scan data or cleaning anything.
