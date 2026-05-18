@@ -97,13 +97,15 @@ class WP_LOC_GitHub_Updater {
             return $source;
         }
 
-        $target = trailingslashit( $remote_source ) . $expected_directory;
-
-        if ( file_exists( $target ) ) {
-            return trailingslashit( $target );
-        }
+        $target = trailingslashit( dirname( $source_path ) ) . $expected_directory;
 
         global $wp_filesystem;
+
+        if ( $wp_filesystem && $wp_filesystem->exists( $target ) ) {
+            $wp_filesystem->delete( $target, true );
+        } elseif ( file_exists( $target ) ) {
+            $this->delete_directory( $target );
+        }
 
         if ( $wp_filesystem && $wp_filesystem->move( $source_path, $target, true ) ) {
             return trailingslashit( $target );
@@ -114,6 +116,34 @@ class WP_LOC_GitHub_Updater {
         }
 
         return $source;
+    }
+
+    private function delete_directory( string $directory ): void {
+        if ( ! is_dir( $directory ) ) {
+            return;
+        }
+
+        $items = scandir( $directory );
+
+        if ( ! is_array( $items ) ) {
+            return;
+        }
+
+        foreach ( $items as $item ) {
+            if ( $item === '.' || $item === '..' ) {
+                continue;
+            }
+
+            $path = $directory . DIRECTORY_SEPARATOR . $item;
+
+            if ( is_dir( $path ) ) {
+                $this->delete_directory( $path );
+            } else {
+                @unlink( $path );
+            }
+        }
+
+        @rmdir( $directory );
     }
 
     public function clear_cache_after_update( $upgrader, array $hook_extra ): void {
