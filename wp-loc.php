@@ -2,6 +2,7 @@
 
 /*
 Plugin Name: WP-LOC
+Plugin URI: https://wp-loc.com/
 Description: Lightweight multilanguage plugin for WordPress
 Version: 1.0.3
 Author: Vitalii Kaplia
@@ -92,3 +93,15 @@ add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), function ( arr
 
     return $links;
 } );
+
+add_filter( 'plugin_row_meta', function ( array $plugin_meta, string $plugin_file ): array {
+    if ( $plugin_file !== WP_LOC_BASENAME ) {
+        return $plugin_meta;
+    }
+
+    $plugin_site_link = '<a href="' . esc_url( 'https://wp-loc.com/' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Visit plugin site' ) . '</a>';
+
+    array_splice( $plugin_meta, 2, 0, [ $plugin_site_link ] );
+
+    return $plugin_meta;
+}, 10, 2 );
