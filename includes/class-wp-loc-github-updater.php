@@ -11,7 +11,7 @@ class WP_LOC_GitHub_Updater {
     public function __construct() {
         add_filter( 'pre_set_site_transient_update_plugins', [ $this, 'filter_update_plugins_transient' ] );
         add_filter( 'plugins_api', [ $this, 'filter_plugins_api' ], 10, 3 );
-        add_filter( 'upgrader_source_selection', [ $this, 'normalize_github_source_directory' ], 10, 4 );
+        add_filter( 'upgrader_source_selection', [ $this, 'normalize_github_source_directory' ], 11, 4 );
         add_action( 'upgrader_process_complete', [ $this, 'clear_cache_after_update' ], 10, 2 );
     }
 
@@ -78,35 +78,39 @@ class WP_LOC_GitHub_Updater {
     }
 
     public function normalize_github_source_directory( $source, string $remote_source, $upgrader, array $hook_extra = [] ) {
+        if ( is_wp_error( $source ) ) {
+            return $source;
+        }
+
         if ( empty( $hook_extra['plugin'] ) || $hook_extra['plugin'] !== WP_LOC_BASENAME ) {
             return $source;
         }
 
-        $source = untrailingslashit( $source );
+        $source_path = untrailingslashit( (string) $source );
         $expected_directory = $this->get_slug();
 
-        if ( basename( $source ) === $expected_directory ) {
-            return $source;
+        if ( basename( $source_path ) === $expected_directory ) {
+            return trailingslashit( $source_path );
         }
 
-        if ( ! str_starts_with( basename( $source ), $expected_directory . '-' ) ) {
+        if ( ! str_starts_with( basename( $source_path ), $expected_directory . '-' ) ) {
             return $source;
         }
 
         $target = trailingslashit( $remote_source ) . $expected_directory;
 
         if ( file_exists( $target ) ) {
-            return $source;
+            return trailingslashit( $target );
         }
 
         global $wp_filesystem;
 
-        if ( $wp_filesystem && $wp_filesystem->move( $source, $target, true ) ) {
-            return $target;
+        if ( $wp_filesystem && $wp_filesystem->move( $source_path, $target, true ) ) {
+            return trailingslashit( $target );
         }
 
-        if ( @rename( $source, $target ) ) {
-            return $target;
+        if ( @rename( $source_path, $target ) ) {
+            return trailingslashit( $target );
         }
 
         return $source;
