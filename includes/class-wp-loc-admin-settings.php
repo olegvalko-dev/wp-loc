@@ -209,12 +209,13 @@ TWIG;
      */
     public function filter_post_types( array $post_types ): array {
         $saved = get_option( self::OPTION_KEY );
+        $detected = self::get_detected_translatable_post_types();
 
         if ( $saved !== false && is_array( $saved ) ) {
-            return $saved;
+            return array_values( array_unique( array_merge( $saved, $detected ) ) );
         }
 
-        return array_values( array_unique( array_merge( $post_types, self::get_detected_translatable_post_types() ) ) );
+        return array_values( array_unique( array_merge( $post_types, $detected ) ) );
     }
 
     /**
@@ -230,12 +231,13 @@ TWIG;
      */
     public function filter_taxonomies( array $taxonomies ): array {
         $saved = get_option( self::TAXONOMIES_OPTION_KEY );
+        $detected = self::get_detected_translatable_taxonomies();
 
         if ( $saved !== false && is_array( $saved ) ) {
-            return $saved;
+            return array_values( array_unique( array_merge( $saved, $detected ) ) );
         }
 
-        return array_values( array_unique( array_merge( $taxonomies, self::get_detected_translatable_taxonomies() ) ) );
+        return array_values( array_unique( array_merge( $taxonomies, $detected ) ) );
     }
 
     private static function get_detected_translatable_post_types(): array {
