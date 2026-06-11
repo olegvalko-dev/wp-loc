@@ -1221,7 +1221,13 @@ class WP_LOC_Admin {
                     $cls = $is_published ? 'wp-loc-t-published' : 'wp-loc-t-draft';
                     $items[] = '<a href="' . esc_url( $edit_link ) . '" class="wp-loc-t ' . $cls . '" title="' . esc_attr__( 'Edit translation', 'wp-loc' ) . '">' . $flag_img . $pencil . '</a>';
                 } else {
-                    $items[] = '<span class="wp-loc-t wp-loc-t-missing">' . $flag_img . '</span>';
+                    $create_title = sprintf(
+                        /* translators: %s: language name */
+                        esc_attr__( 'Create %s translation', 'wp-loc' ),
+                        WP_LOC_Languages::get_display_name( $slug )
+                    );
+                    $plus = '<span class="wp-loc-pencil">+</span>';
+                    $items[] = '<a href="#" class="wp-loc-t wp-loc-t-missing wp-loc-create-translation-link" data-post-id="' . esc_attr( $post_id ) . '" data-lang="' . esc_attr( $slug ) . '" title="' . $create_title . '" aria-label="' . $create_title . '">' . $flag_img . $plus . '</a>';
                 }
             }
 
