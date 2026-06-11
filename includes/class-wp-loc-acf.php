@@ -2592,31 +2592,48 @@ class WP_LOC_ACF {
     public function handle_load_field( array $field ): array {
         if ( ! is_admin() ) return $field;
 
-        $field = $this->normalize_field_translation_settings( $field );
+        static $loading_keys = [];
+        $guard_key = (string) ( $field['key'] ?? $field['name'] ?? '' );
 
-        if ( ! isset( $field['name'] ) ) {
+        if ( $guard_key !== '' && isset( $loading_keys[ $guard_key ] ) ) {
             return $field;
         }
 
-        $translation_mode = $field['translation_mode'] ?? $this->get_translation_mode( $field );
+        if ( $guard_key !== '' ) {
+            $loading_keys[ $guard_key ] = true;
+        }
 
-        if ( $translation_mode !== 'shared' ) {
+        try {
+            $field = $this->normalize_field_translation_settings( $field );
+
+            if ( ! isset( $field['name'] ) ) {
+                return $field;
+            }
+
+            $translation_mode = $field['translation_mode'] ?? $this->get_translation_mode( $field );
+
+            if ( $translation_mode !== 'shared' ) {
+                return $field;
+            }
+
+            $context_post_id = $this->get_current_admin_acf_post_id();
+            $should_disable = $context_post_id !== null && (
+                $this->is_readonly_translated_options_field( $context_post_id, $field )
+                || $this->is_readonly_translated_entity_field( $context_post_id, $field )
+            );
+
+            if ( $should_disable ) {
+                $field['readonly'] = 1;
+                $field['disabled'] = 1;
+                $field['wrapper']['class'] = ( $field['wrapper']['class'] ?? '' ) . ' acf-disabled';
+            }
+
             return $field;
+        } finally {
+            if ( $guard_key !== '' ) {
+                unset( $loading_keys[ $guard_key ] );
+            }
         }
-
-        $context_post_id = $this->get_current_admin_acf_post_id();
-        $should_disable = $context_post_id !== null && (
-            $this->is_readonly_translated_options_field( $context_post_id, $field )
-            || $this->is_readonly_translated_entity_field( $context_post_id, $field )
-        );
-
-        if ( $should_disable ) {
-            $field['readonly'] = 1;
-            $field['disabled'] = 1;
-            $field['wrapper']['class'] = ( $field['wrapper']['class'] ?? '' ) . ' acf-disabled';
-        }
-
-        return $field;
     }
 
     /**
