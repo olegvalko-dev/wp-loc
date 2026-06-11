@@ -1050,8 +1050,15 @@ class WP_LOC_Admin {
 
             $db = WP_LOC::instance()->db;
             $element_type = WP_LOC_DB::post_element_type( $post_type );
+            $current_lang = $db->get_element_language( $post_id, $element_type );
 
             $items = [];
+
+            if ( ! $current_lang ) {
+                $tip = esc_attr__( 'Language not assigned. Use Quick Edit or Bulk Edit to set a language.', 'wp-loc' );
+                $items[] = '<span class="wp-loc-t wp-loc-t-no-lang" title="' . $tip . '" aria-label="' . $tip . '">⚠</span>';
+            }
+
             foreach ( $other_langs as $slug => $data ) {
                 $locale = $data['locale'] ?? $slug;
                 $flag = WP_LOC_Languages::get_flag_url( $locale );
