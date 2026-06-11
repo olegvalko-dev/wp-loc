@@ -402,6 +402,16 @@ $transition-speed: .15s;
   }
 }
 
+.wp-loc-t-no-lang {
+  color: $color-warning;
+  font-size: 14px;
+  line-height: 20px;
+  margin-right: 4px;
+  cursor: help;
+  width: auto;
+  padding: 0 2px;
+}
+
 .column-wp_loc_translations {
   width: 110px;
   min-width: 110px;
