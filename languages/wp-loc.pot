@@ -76,3 +76,9 @@ msgstr ""
 
 msgid "Display Name"
 msgstr ""
+
+msgid "Public post types"
+msgstr ""
+
+msgid "Non-public post types"
+msgstr ""

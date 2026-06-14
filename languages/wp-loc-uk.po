@@ -466,6 +466,14 @@ msgstr "Налаштування збережено."
 msgid "Translatable Post Types"
 msgstr "Типи записів для перекладу"
 
+#: includes/class-wp-loc-admin-settings.php:650
+msgid "Public post types"
+msgstr "Публічні типи записів"
+
+#: includes/class-wp-loc-admin-settings.php:655
+msgid "Non-public post types"
+msgstr "Непублічні типи записів"
+
 #: includes/class-wp-loc-admin-settings.php:322
 msgid "Select which post types should support multilingual translations."
 msgstr "Оберіть які типи записів мають підтримувати багатомовні переклади."

@@ -32,6 +32,7 @@ class WP_LOC_Admin_Settings {
     const TAB_SWITCHER = 'switcher';
     const TAB_INTEGRATIONS = 'integrations';
     const TAB_AI = 'ai';
+    const EXCLUDED_SELECTABLE_POST_TYPES = [ 'attachment', 'nav_menu_item', 'revision' ];
 
     private static $detected_translatable_post_types = null;
     private static $detected_translatable_taxonomies = null;
@@ -292,6 +293,39 @@ TWIG;
         ) );
     }
 
+    private static function get_selectable_post_types(): array {
+        return array_filter(
+            get_post_types( [], 'objects' ),
+            static function ( $post_type ): bool {
+                if ( ! isset( $post_type->name ) || in_array( $post_type->name, self::EXCLUDED_SELECTABLE_POST_TYPES, true ) ) {
+                    return false;
+                }
+
+                if ( ! empty( $post_type->_builtin ) && empty( $post_type->public ) ) {
+                    return false;
+                }
+
+                return ! empty( $post_type->public ) || ! empty( $post_type->show_ui );
+            }
+        );
+    }
+
+    private function render_post_type_checkboxes( array $post_types, array $selected ): void {
+        foreach ( $post_types as $pt ) :
+            ?>
+            <label class="wp-loc-settings-label">
+                <input type="checkbox"
+                       name="wp_loc_post_types[]"
+                       value="<?php echo esc_attr( $pt->name ); ?>"
+                       <?php checked( in_array( $pt->name, $selected, true ) ); ?>
+                />
+                <span><?php echo esc_html( $pt->labels->name ); ?></span>
+                <code>(<?php echo esc_html( $pt->name ); ?>)</code>
+            </label>
+            <?php
+        endforeach;
+    }
+
     /**
      * Check if taxonomy is translatable
      */
@@ -523,8 +557,15 @@ TWIG;
     }
 
     public function render_page(): void {
-        $all_post_types = get_post_types( [ 'public' => true ], 'objects' );
-        unset( $all_post_types['attachment'] );
+        $all_post_types = self::get_selectable_post_types();
+        $public_post_types = array_filter(
+            $all_post_types,
+            static fn( $post_type ): bool => ! empty( $post_type->public )
+        );
+        $non_public_post_types = array_filter(
+            $all_post_types,
+            static fn( $post_type ): bool => empty( $post_type->public )
+        );
         $all_taxonomies = get_taxonomies( [ 'public' => true ], 'objects' );
         unset( $all_taxonomies['post_format'], $all_taxonomies['nav_menu'] );
 
@@ -623,17 +664,15 @@ TWIG;
                                 <th scope="row"><?php esc_html_e( 'Translatable Post Types', 'wp-loc' ); ?></th>
                                 <td>
                                     <fieldset class="wp-loc-settings-stack">
-                                        <?php foreach ( $all_post_types as $pt ) : ?>
-                                            <label class="wp-loc-settings-label">
-                                                <input type="checkbox"
-                                                       name="wp_loc_post_types[]"
-                                                       value="<?php echo esc_attr( $pt->name ); ?>"
-                                                       <?php checked( in_array( $pt->name, $selected, true ) ); ?>
-                                                />
-                                                <span><?php echo esc_html( $pt->labels->name ); ?></span>
-                                                <code>(<?php echo esc_html( $pt->name ); ?>)</code>
-                                            </label>
-                                        <?php endforeach; ?>
+                                        <?php if ( $public_post_types ) : ?>
+                                            <strong><?php esc_html_e( 'Public post types', 'wp-loc' ); ?></strong>
+                                            <?php $this->render_post_type_checkboxes( $public_post_types, $selected ); ?>
+                                        <?php endif; ?>
+
+                                        <?php if ( $non_public_post_types ) : ?>
+                                            <strong><?php esc_html_e( 'Non-public post types', 'wp-loc' ); ?></strong>
+                                            <?php $this->render_post_type_checkboxes( $non_public_post_types, $selected ); ?>
+                                        <?php endif; ?>
                                     </fieldset>
                                     <p class="description"><?php esc_html_e( 'Select which post types should support multilingual translations.', 'wp-loc' ); ?></p>
                                 </td>
