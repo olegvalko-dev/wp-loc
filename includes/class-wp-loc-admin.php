@@ -48,22 +48,22 @@ class WP_LOC_Admin {
         if ( $screen && $editing_post_id && get_post( $editing_post_id ) ) {
             $editing_post = get_post( $editing_post_id );
 
-            if ( $editing_post instanceof \WP_Post && WP_LOC_Admin_Settings::is_translatable( $editing_post->post_type ) ) {
+            if ( $editing_post instanceof \WP_Post && $this->should_show_title_translate_for_post( $editing_post ) ) {
                 $title_translate_config = [
                     'postId'      => $editing_post->ID,
                     'currentLang' => WP_LOC::instance()->db->get_element_language( $editing_post->ID, WP_LOC_DB::post_element_type( $editing_post->post_type ) ),
                     'targets'     => $this->get_title_translate_targets( $editing_post ),
                 ];
 
-                if ( $screen->is_block_editor ) {
+                if ( $screen->is_block_editor() ) {
                     $gutenberg_title_translate = $title_translate_config;
-                } elseif ( in_array( $screen->base, [ 'post', 'post-new' ], true ) ) {
+                } else {
                     $classic_title_translate = $title_translate_config;
                 }
             }
         }
 
-        if ( $screen && $screen->is_block_editor ) {
+        if ( $screen && $screen->is_block_editor() ) {
             $deps[] = 'wp-data';
             if ( $editing_post_id && get_post( $editing_post_id ) ) {
                 $editing_post = get_post( $editing_post_id );
@@ -145,12 +145,16 @@ class WP_LOC_Admin {
         ] );
     }
 
+    private function should_show_title_translate_for_post( \WP_Post $post ): bool {
+        return WP_LOC_Admin_Settings::is_translatable( (string) $post->post_type );
+    }
+
     public function add_title_translate_action( array $actions, \WP_Post $post ): array {
         if ( ! is_admin() || ! current_user_can( 'edit_post', $post->ID ) ) {
             return $actions;
         }
 
-        if ( ! WP_LOC_Admin_Settings::is_translatable( $post->post_type ) ) {
+        if ( ! $this->should_show_title_translate_for_post( $post ) ) {
             return $actions;
         }
 
