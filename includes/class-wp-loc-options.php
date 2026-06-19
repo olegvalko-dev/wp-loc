@@ -43,6 +43,20 @@ class WP_LOC_Options {
             return true;
         }
 
+        return self::is_page_id_option_value( $value );
+    }
+
+    private static function is_page_id_option_value( $value ): bool {
+        if ( is_array( $value ) || is_object( $value ) || $value === null ) {
+            return false;
+        }
+
+        $value = trim( (string) $value );
+
+        if ( $value === '' || ! ctype_digit( $value ) ) {
+            return false;
+        }
+
         $page_id = (int) $value;
 
         return $page_id > 0 && get_post_type( $page_id ) === 'page';
@@ -253,7 +267,7 @@ class WP_LOC_Options {
         if ( $admin_lang === $default_lang ) return;
 
         // On settings pages — filter all multilingual options
-        // On edit screens — filter only page_on_front/page_for_posts (for post status labels)
+        // On edit screens — filter page ID options for post status labels
         $is_settings = in_array( $screen->id, [ 'options-general', 'options-reading' ], true )
             || $screen->parent_base === 'options-general'
             || str_starts_with( (string) $screen->id, 'settings_page_' );
@@ -261,12 +275,10 @@ class WP_LOC_Options {
 
         if ( ! $is_settings && ! $is_edit ) return;
 
-        $options_to_filter = $is_settings
-            ? array_keys( self::$multilingual_options )
-            : array_intersect( [ 'page_on_front', 'page_for_posts' ], array_keys( self::$multilingual_options ) );
+        $options_to_filter = array_keys( self::$multilingual_options );
 
         foreach ( $options_to_filter as $option ) {
-            add_filter( "option_{$option}", function ( $value ) use ( $option, $admin_lang ) {
+            add_filter( "option_{$option}", function ( $value ) use ( $option, $admin_lang, $is_edit ) {
                 static $filtering = [];
                 if ( isset( $filtering[ $option ] ) ) return $value;
                 $filtering[ $option ] = true;
@@ -276,11 +288,13 @@ class WP_LOC_Options {
                 unset( $filtering[ $option ] );
 
                 if ( $has_localized_value && $localized !== '' && self::is_valid_localized_page_option_value( $option, $localized ) ) {
-                    return $localized;
+                    if ( ! $is_edit || self::is_page_id_option_value( $localized ) ) {
+                        return $localized;
+                    }
                 }
 
                 // Auto-resolve page IDs to their translations
-                if ( in_array( $option, [ 'page_on_front', 'page_for_posts' ], true ) && $value ) {
+                if ( self::is_page_id_option_value( $value ) ) {
                     $post_type = get_post_type( $value );
                     if ( $post_type ) {
                         $element_type = WP_LOC_DB::post_element_type( $post_type );
