@@ -3435,12 +3435,41 @@ class WP_LOC_ACF {
             }
         }
 
-        if ( function_exists( 'acf_get_field' ) ) {
-            $parent_field = acf_get_field( $parent );
+        // Walk up the ancestor chain WITHOUT firing the `acf/load_field`
+        // filter. Using acf_get_field() here re-enters handle_load_field()
+        // and, for repeater/flexible-content parents, reloads every sub-field
+        // — each of which walks back up to the same parent — causing infinite
+        // recursion. A raw getter returns the parent field (with its own
+        // `parent` key) without triggering any load hooks.
+        $parent_field = $this->get_raw_field_without_load_filter( $parent );
 
-            if ( is_array( $parent_field ) ) {
-                return $this->get_field_group_for_field( $parent_field );
-            }
+        if ( is_array( $parent_field ) ) {
+            return $this->get_field_group_for_field( $parent_field );
+        }
+
+        return null;
+    }
+
+    /**
+     * Fetch a field by key/ID without applying the `acf/load_field` filter.
+     *
+     * @param int|string $id Field key or ID.
+     */
+    private function get_raw_field_without_load_filter( $id ): ?array {
+        if (
+            function_exists( 'acf_is_local_field' ) &&
+            function_exists( 'acf_get_local_field' ) &&
+            acf_is_local_field( $id )
+        ) {
+            $field = acf_get_local_field( $id );
+
+            return is_array( $field ) ? $field : null;
+        }
+
+        if ( function_exists( 'acf_get_raw_field' ) ) {
+            $field = acf_get_raw_field( $id );
+
+            return is_array( $field ) ? $field : null;
         }
 
         return null;
