@@ -2871,6 +2871,36 @@ class WP_LOC_ACF {
 
         $translation_mode = $this->get_translation_mode( $field );
 
+        // A leaf field inside a translatable/copy_once container resolves to its own (usually
+        // 'none') mode, which would wrongly fall back to the base language below. ACF rebuilds a
+        // container by loading each flattened sub-field (e.g. {repeater}_0_label) via
+        // acf_get_value(), so detect a translatable container ancestor and read the sub-value
+        // from the translated options store instead of the base.
+        if ( $this->is_translated_options_post_id( $post_id ) && $options_language ) {
+            $container_ancestor = $this->get_deferred_container_ancestor_field( $field );
+            $ancestor_is_self = $container_ancestor && ( $container_ancestor['key'] ?? '' ) === ( $field['key'] ?? '' );
+
+            if ( $container_ancestor && ! $ancestor_is_self
+                && in_array( $this->get_translation_mode( $container_ancestor ), [ 'translatable', 'copy_once' ], true ) ) {
+                $base_post_id = $this->get_base_options_post_id( $post_id );
+
+                if ( $base_post_id ) {
+                    $value = $this->get_translatable_option_value( $options_language, (string) $field['name'], $base_post_id );
+
+                    if ( $value !== false ) {
+                        return $value;
+                    }
+
+                    // No translated sub-value stored yet — fall back to the base (copy behaviour).
+                    return $this->map_field_value_to_language(
+                        get_option( "{$base_post_id}_{$field['name']}", null ),
+                        $field,
+                        $options_language
+                    );
+                }
+            }
+        }
+
         if ( in_array( $translation_mode, [ 'none', 'shared' ], true ) && $this->is_translated_options_post_id( $post_id ) ) {
             $base_post_id = $this->get_base_options_post_id( $post_id );
 
