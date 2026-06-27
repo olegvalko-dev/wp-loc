@@ -266,19 +266,23 @@ class WP_LOC_Options {
 
         if ( $admin_lang === $default_lang ) return;
 
-        // On settings pages — filter all multilingual options
-        // On edit screens — filter page ID options for post status labels
+        // On settings pages — filter all multilingual options.
+        // On edit/list screens — filter page ID options for post status labels and core page notices.
         $is_settings = in_array( $screen->id, [ 'options-general', 'options-reading' ], true )
             || $screen->parent_base === 'options-general'
             || str_starts_with( (string) $screen->id, 'settings_page_' );
         $is_edit = ( $screen->base === 'edit' );
+        $is_post_editor = ( $screen->base === 'post' );
 
-        if ( ! $is_settings && ! $is_edit ) return;
+        if ( ! $is_settings && ! $is_edit && ! $is_post_editor ) return;
 
-        $options_to_filter = array_keys( self::$multilingual_options );
+        $options_to_filter = $is_post_editor
+            ? array_intersect( [ 'page_on_front', 'page_for_posts' ], array_keys( self::$multilingual_options ) )
+            : array_keys( self::$multilingual_options );
+        $page_id_only_context = $is_edit || $is_post_editor;
 
         foreach ( $options_to_filter as $option ) {
-            add_filter( "option_{$option}", function ( $value ) use ( $option, $admin_lang, $is_edit ) {
+            add_filter( "option_{$option}", function ( $value ) use ( $option, $admin_lang, $page_id_only_context ) {
                 static $filtering = [];
                 if ( isset( $filtering[ $option ] ) ) return $value;
                 $filtering[ $option ] = true;
@@ -288,7 +292,7 @@ class WP_LOC_Options {
                 unset( $filtering[ $option ] );
 
                 if ( $has_localized_value && $localized !== '' && self::is_valid_localized_page_option_value( $option, $localized ) ) {
-                    if ( ! $is_edit || self::is_page_id_option_value( $localized ) ) {
+                    if ( ! $page_id_only_context || self::is_page_id_option_value( $localized ) ) {
                         return $localized;
                     }
                 }
