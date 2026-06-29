@@ -82,3 +82,9 @@ msgstr ""
 
 msgid "Non-public post types"
 msgstr ""
+
+#, php-format
+msgid "%s translation record found."
+msgid_plural "%s translation records found."
+msgstr[0] ""
+msgstr[1] ""

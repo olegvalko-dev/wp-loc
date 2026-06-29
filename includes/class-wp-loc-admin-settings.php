@@ -35,6 +35,7 @@ class WP_LOC_Admin_Settings {
     const EXCLUDED_SELECTABLE_POST_TYPES = [ 'attachment', 'nav_menu_item', 'revision' ];
 
     private static $detected_translatable_post_types = null;
+    private static $detected_translatable_post_type_counts = null;
     private static $detected_translatable_taxonomies = null;
 
     public function __construct() {
@@ -210,11 +211,12 @@ TWIG;
      */
     public function filter_post_types( array $post_types ): array {
         $saved = get_option( self::OPTION_KEY );
-        $detected = self::get_detected_translatable_post_types();
 
         if ( $saved !== false && is_array( $saved ) ) {
-            return array_values( array_unique( array_merge( $saved, $detected ) ) );
+            return array_values( array_unique( array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) ) ) );
         }
+
+        $detected = self::get_detected_translatable_post_types();
 
         return array_values( array_unique( array_merge( $post_types, $detected ) ) );
     }
@@ -232,11 +234,12 @@ TWIG;
      */
     public function filter_taxonomies( array $taxonomies ): array {
         $saved = get_option( self::TAXONOMIES_OPTION_KEY );
-        $detected = self::get_detected_translatable_taxonomies();
 
         if ( $saved !== false && is_array( $saved ) ) {
-            return array_values( array_unique( array_merge( $saved, $detected ) ) );
+            return array_values( array_unique( array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) ) ) );
         }
+
+        $detected = self::get_detected_translatable_taxonomies();
 
         return array_values( array_unique( array_merge( $taxonomies, $detected ) ) );
     }
@@ -246,25 +249,43 @@ TWIG;
             return self::$detected_translatable_post_types;
         }
 
+        return self::$detected_translatable_post_types = array_keys( self::get_detected_translatable_post_type_counts() );
+    }
+
+    private static function get_detected_translatable_post_type_counts(): array {
+        if ( self::$detected_translatable_post_type_counts !== null ) {
+            return self::$detected_translatable_post_type_counts;
+        }
+
         global $wpdb;
 
         $table = $wpdb->prefix . 'icl_translations';
         if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
-            return self::$detected_translatable_post_types = [];
+            return self::$detected_translatable_post_type_counts = [];
         }
 
-        $types = $wpdb->get_col(
-            "SELECT DISTINCT REPLACE(element_type, 'post_', '') AS post_type
+        $rows = $wpdb->get_results(
+            "SELECT REPLACE(element_type, 'post_', '') AS post_type, COUNT(*) AS translation_count
              FROM {$table}
-             WHERE element_type LIKE 'post\_%'"
+             WHERE element_type LIKE 'post\_%'
+             GROUP BY element_type",
+            ARRAY_A
         );
 
-        $excluded = [ 'attachment', 'nav_menu_item', 'revision' ];
+        $counts = [];
 
-        return self::$detected_translatable_post_types = array_values( array_filter(
-            array_map( 'sanitize_key', array_map( 'strval', (array) $types ) ),
-            static fn( string $post_type ): bool => $post_type !== '' && ! in_array( $post_type, $excluded, true ) && post_type_exists( $post_type )
-        ) );
+        foreach ( (array) $rows as $row ) {
+            $post_type = sanitize_key( (string) ( $row['post_type'] ?? '' ) );
+            $count = (int) ( $row['translation_count'] ?? 0 );
+
+            if ( $post_type === '' || $count < 1 || in_array( $post_type, self::EXCLUDED_SELECTABLE_POST_TYPES, true ) || ! post_type_exists( $post_type ) ) {
+                continue;
+            }
+
+            $counts[ $post_type ] = $count;
+        }
+
+        return self::$detected_translatable_post_type_counts = $counts;
     }
 
     private static function get_detected_translatable_taxonomies(): array {
@@ -311,7 +332,10 @@ TWIG;
     }
 
     private function render_post_type_checkboxes( array $post_types, array $selected ): void {
+        $translation_counts = self::get_detected_translatable_post_type_counts();
+
         foreach ( $post_types as $pt ) :
+            $translation_count = (int) ( $translation_counts[ $pt->name ] ?? 0 );
             ?>
             <label class="wp-loc-settings-label">
                 <input type="checkbox"
@@ -321,6 +345,16 @@ TWIG;
                 />
                 <span><?php echo esc_html( $pt->labels->name ); ?></span>
                 <code>(<?php echo esc_html( $pt->name ); ?>)</code>
+                <?php if ( $translation_count > 0 ) : ?>
+                    <span class="description">
+                        <?php
+                        echo esc_html( sprintf(
+                            _n( '%s translation record found.', '%s translation records found.', $translation_count, 'wp-loc' ),
+                            number_format_i18n( $translation_count )
+                        ) );
+                        ?>
+                    </span>
+                <?php endif; ?>
             </label>
             <?php
         endforeach;

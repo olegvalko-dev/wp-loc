@@ -474,6 +474,14 @@ msgstr "Публічні типи записів"
 msgid "Non-public post types"
 msgstr "Непублічні типи записів"
 
+#: includes/class-wp-loc-admin-settings.php:337
+#, php-format
+msgid "%s translation record found."
+msgid_plural "%s translation records found."
+msgstr[0] "Знайдено %s запис перекладу."
+msgstr[1] "Знайдено %s записи перекладу."
+msgstr[2] "Знайдено %s записів перекладу."
+
 #: includes/class-wp-loc-admin-settings.php:322
 msgid "Select which post types should support multilingual translations."
 msgstr "Оберіть які типи записів мають підтримувати багатомовні переклади."
