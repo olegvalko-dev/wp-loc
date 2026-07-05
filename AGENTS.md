@@ -31,6 +31,7 @@ includes/
   class-wp-loc-terms.php            → Taxonomy/term translations, term admin UI, term routing, duplicate slugs per language
   class-wp-loc-timber.php           → Timber/Twig integration for switcher helpers
   class-wp-loc-github-updater.php   → GitHub branch-based updater using the remote plugin header Version value
+  class-wp-loc-duplicate-post.php   → Yoast Duplicate Post integration: clones the whole translation group and links copies as a new group
 assets/
   flags/                           → SVG country flags
   scss/admin.scss                  → SCSS source (compiled by Prepros)
@@ -85,6 +86,7 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **ACF config compatibility**: `wp-loc` must read and export ACFML-compatible field group mode (`acfml_field_group_mode`) and field preferences (`wpml_cf_preferences`) consistently whether ACF field groups come from the DB, local JSON, or `acf_add_local_field_group()` PHP registration. Local JSON export should preserve these settings.
 - **ACF nav_menu fields**: `nav_menu` ACF fields are mapped through menu translations so option values and formatted field output resolve to the menu in the current language context.
 - **ACF picker queries**: ACF `post_object`, `page_link`, `relationship`, `taxonomy`, and `nav_menu` picker choices must be scoped to the current editor language. Query hooks should pass `lang` / `suppress_filters=false` so picker results do not mix content from all languages.
+- **Duplicate Post integration**: When Yoast Duplicate Post is active, cloning a translatable post must clone its whole translation group. `WP_LOC_Duplicate_Post` hooks `duplicate_post_after_duplicated` (priority 100, after Duplicate Post copies meta/children/attachments/comments/taxonomies), registers the copy as the source of a new `trid`, and duplicates each sibling translation through `duplicate_post_create_duplicate()` so copied data follows the user's Duplicate Post settings, then links each sibling copy into the new group with `source_language_code` pointing at the copied source. During a copy operation it suspends WP-LOC's default new-post registration via `WP_LOC_Content::$suspend_new_post_registration` (toggled on `duplicate_post_pre_copy` / `duplicate_post_post_copy` with a depth counter) so copies are not double-registered or given empty auto-draft translations. The **Rewrite & Republish** flow must stay untouched: it uses Duplicate Post's OOP duplicator, never fires `duplicate_post_after_duplicated`, and merges back into the original, which keeps its existing links. The class only registers Duplicate Post's own hooks, so it is a no-op when the plugin is absent.
 - **AI settings**: `Multilingual > Settings > AI` stores provider selection, provider API keys, and an opt-in flag for AI-assisted custom nav menu link translation during menu sync.
 - **AI translation tool**: `Multilingual > Tools > AI Translation` uses TinyMCE + AJAX to translate formatted HTML content and insert the translated result back into the editor without reloading the page.
 - **AI-assisted menu sync**: When enabled in settings, `WP Menus Sync` attempts to translate custom nav menu links (`custom` items) with AI while preserving URL/target/classes/XFN and tracking source hashes so preview can detect whether custom-link translations are up to date.
@@ -128,6 +130,7 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_locale_slug_map` — override locale → slug mapping
 - `wp_loc_default_multilingual_options` — option names to localize
 - `wp_loc_multilingual_options` — action to register an option as multilingual
+- `wp_loc_duplicate_translation_group` — enable/disable cloning the translation group during Yoast Duplicate Post copies (default: `true`)
 
 ### AJAX endpoints
 - `wp_loc_create_translation` — create a single translation for a post+language (used by metabox `+` button)
@@ -151,6 +154,7 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - ACF module only loads when ACF plugin is active
 - Timber integration only loads when Timber is present
 - Admin classes only instantiate on `is_admin()`
+- `WP_LOC_Duplicate_Post` instantiates on `is_admin()` and is inert without Yoast Duplicate Post (it only registers Duplicate Post's own hooks)
 - Settings are tabbed. Saving one settings tab must never wipe values from the other tabs.
 - Do not edit `assets/css/admin.min.css` or `assets/js/admin.min.js` manually. Prepros compiles them from `assets/scss/admin.scss` and `assets/js/admin.js`.
 - If you change `assets/scss/admin.scss`, an imported partial, `assets/js/admin.js`, or a prepended JS source such as `assets/js/db-optimization-wizard.js`, Prepros must rebuild `assets/css/admin.min.css` / `assets/js/admin.min.js` for the admin UI to reflect the change.

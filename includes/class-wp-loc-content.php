@@ -9,6 +9,12 @@ class WP_LOC_Content {
     private static $deleting = false;
 
     /**
+     * When true, the default new-post registration/auto-translation is suspended.
+     * Used by the Duplicate Post integration, which registers copies explicitly.
+     */
+    public static $suspend_new_post_registration = false;
+
+    /**
      * Get multilingual taxonomies that should be synced for a post type.
      *
      * @return string[]
@@ -142,7 +148,7 @@ class WP_LOC_Content {
      * Mark newly created posts
      */
     public function mark_new_post( int $post_id, \WP_Post $post, bool $update ): void {
-        if ( $update || self::$creating_translations ) return;
+        if ( $update || self::$creating_translations || self::$suspend_new_post_registration ) return;
 
         $translatable = apply_filters( 'wp_loc_translatable_post_types', [ 'post', 'page' ] );
         if ( ! in_array( $post->post_type, $translatable, true ) ) return;
@@ -154,7 +160,7 @@ class WP_LOC_Content {
      * Handle post save — register in icl_translations and optionally create duplicates
      */
     public function handle_save_post( int $post_id, \WP_Post $post, bool $update ): void {
-        if ( self::$creating_translations ) return;
+        if ( self::$creating_translations || self::$suspend_new_post_registration ) return;
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) return;
         if ( $post->post_status === 'auto-draft' ) return;
 
@@ -272,7 +278,7 @@ class WP_LOC_Content {
      * Sync post properties to all translations (both directions)
      */
     public function sync_translations( int $post_id, \WP_Post $post ): void {
-        if ( self::$syncing || self::$creating_translations ) return;
+        if ( self::$syncing || self::$creating_translations || self::$suspend_new_post_registration ) return;
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) return;
         if ( $post->post_status === 'auto-draft' ) return;
 

@@ -49,6 +49,7 @@ Lightweight multilingual plugin for WordPress.
 - **ACF media/relation mapping** — translated attachment, post, term, and nav menu IDs are resolved per language for fields like `image`, `file`, `gallery`, `post_object`, `page_link`, `relationship`, `taxonomy`, and `nav_menu`
 - **ACF container field support** — multilingual behavior for `group`, `repeater`, `flexible_content`, and `clone` fields across options pages, posts/pages, and term edit screens
 - **ACF nav_menu field support** — translated menu values resolve to the correct menu in the current language context
+- **Yoast Duplicate Post integration** — cloning a translatable post also clones its whole translation group; the copies are duplicated through Duplicate Post's own engine and linked together as a new translation group, while Rewrite & Republish is left untouched
 - **Timber integration** — Twig functions `wp_loc_language_switcher()` and `wp_loc_languages()`
 - **Activation safety** — on activation, WP-LOC deactivates known conflicting multilingual add-ons instead of deleting them
 - **GitHub updates** — native WordPress plugin updates from the public GitHub repository by comparing the remote `wp-loc.php` `Version:` header on the configured branch
@@ -189,6 +190,15 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - Yoast `stripcategorybase` rewrites remain compatible with multilingual category slugs
 - Yoast News can reuse the current post language code for publication-language output when the addon is active
 
+### Yoast Duplicate Post
+
+- Works with Yoast Duplicate Post's **Clone**, **New Draft**, and bulk **Clone** actions
+- When you clone a translatable post, WP-LOC also duplicates every sibling translation in its group and links all copies together as a fresh translation group, so the clone keeps its multilingual structure
+- Each sibling is duplicated through Duplicate Post's own engine, so copied meta, taxonomies, attachments, and comments follow your Duplicate Post settings
+- **Rewrite & Republish** is intentionally left untouched — it merges the copy back into the original, which keeps its existing translation links
+- Non-translatable post types are duplicated by Duplicate Post normally, with no translation-group handling
+- The behavior can be disabled per project with the `wp_loc_duplicate_translation_group` filter (return `false`)
+
 ### In Twig (Timber)
 ```twig
 {{ wp_loc_language_switcher() }}
@@ -220,6 +230,8 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 ## Compatibility Note
 
 WP-LOC can interoperate with sites that already use the `icl_translations` table and legacy multilingual config files such as `wpml-config.xml`.
+
+WP-LOC also integrates with Yoast Duplicate Post when it is active, so cloning a post keeps its translation group intact. The integration only hooks Duplicate Post's own actions and does nothing when the plugin is not installed.
 
 WP-LOC is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by any third-party multilingual plugin vendor.
 
