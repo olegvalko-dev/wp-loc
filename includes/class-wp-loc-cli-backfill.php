@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 /**
  * WP-CLI commands for WP-LOC.
  */
-class WP_LOC_CLI {
+class WP_LOC_CLI_Backfill {
 
 	/**
 	 * Create missing translations for posts — a full structural copy of each source.

@@ -79,8 +79,8 @@ class WP_LOC {
         }
 
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            require_once WP_LOC_PATH . 'includes/class-wp-loc-cli.php';
-            WP_CLI::add_command( 'wp-loc', 'WP_LOC_CLI' );
+            require_once WP_LOC_PATH . 'includes/class-wp-loc-cli-backfill.php';
+            WP_CLI::add_command( 'wp-loc', 'WP_LOC_CLI_Backfill' );
         }
     }
 
