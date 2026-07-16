@@ -170,16 +170,29 @@ class WP_LOC_Routing {
             return null;
         }
 
-        $hierarchical_post_types = get_post_types( [ 'hierarchical' => true ], 'names' );
+        // A front URL may only resolve to a publicly-viewable post type. Without this
+        // filter the by-name look-ups below match ANY post that shares the slug —
+        // including non-public types (mail-log, sms-log, patterns, …) — leaking them
+        // as front singles (e.g. /test/ surfacing a mail-log row named "test").
+        $viewable_post_types = array_values( array_filter( get_post_types( [], 'names' ), 'is_post_type_viewable' ) );
+
+        if ( empty( $viewable_post_types ) ) {
+            return null;
+        }
+
+        $hierarchical_post_types = array_values( array_intersect(
+            get_post_types( [ 'hierarchical' => true ], 'names' ),
+            $viewable_post_types
+        ) );
 
         if ( ! empty( $hierarchical_post_types ) ) {
-            $language_match = $this->resolve_hierarchical_path_to_post_id( $normalized_path, $lang_slug, array_values( $hierarchical_post_types ) );
+            $language_match = $this->resolve_hierarchical_path_to_post_id( $normalized_path, $lang_slug, $hierarchical_post_types );
 
             if ( $language_match ) {
                 return $language_match;
             }
 
-            $path_match = get_page_by_path( $normalized_path, OBJECT, array_values( $hierarchical_post_types ) );
+            $path_match = get_page_by_path( $normalized_path, OBJECT, $hierarchical_post_types );
 
             if ( $path_match instanceof \WP_Post ) {
                 $matched_post_type = $path_match->post_type;
@@ -203,6 +216,7 @@ class WP_LOC_Routing {
         global $wpdb;
         $table = WP_LOC::instance()->db->get_table();
         $db_lang_slug = WP_LOC_DB::to_db_language_code( $lang_slug ) ?: $lang_slug;
+        $type_placeholders = implode( ', ', array_fill( 0, count( $viewable_post_types ), '%s' ) );
 
         $post_id = $wpdb->get_var( $wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
@@ -210,9 +224,9 @@ class WP_LOC_Routing {
              WHERE p.post_name = %s
                AND t.language_code = %s
                AND p.post_status NOT IN ('trash', 'auto-draft')
+               AND p.post_type IN ({$type_placeholders})
              LIMIT 1",
-            $normalized_path,
-            $db_lang_slug
+            array_merge( [ $normalized_path, $db_lang_slug ], $viewable_post_types )
         ) );
 
         if ( $post_id ) {
@@ -225,8 +239,9 @@ class WP_LOC_Routing {
              WHERE p.post_name = %s
                AND t.element_id IS NULL
                AND p.post_status NOT IN ('trash', 'auto-draft')
+               AND p.post_type IN ({$type_placeholders})
              LIMIT 1",
-            $normalized_path
+            array_merge( [ $normalized_path ], $viewable_post_types )
         ) );
 
         return $post_id ? (int) $post_id : null;

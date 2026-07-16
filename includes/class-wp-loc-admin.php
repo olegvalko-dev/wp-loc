@@ -20,6 +20,7 @@ class WP_LOC_Admin {
         add_action( 'admin_init', [ $this, 'restrict_non_default_language_creation' ] );
         add_filter( 'get_sample_permalink_html', [ $this, 'add_lang_prefix_to_permalink' ], 10, 4 );
         add_filter( 'get_pages', [ $this, 'filter_pages_by_language' ] );
+        add_filter( 'wp_link_query_args', [ $this, 'filter_link_query_by_language' ] );
         add_filter( 'wp_count_posts', [ $this, 'filter_count_posts' ], 10, 3 );
         add_action( 'current_screen', [ $this, 'filter_views_mine_count' ] );
         add_action( 'current_screen', [ $this, 'register_language_columns' ] );
@@ -48,22 +49,22 @@ class WP_LOC_Admin {
         if ( $screen && $editing_post_id && get_post( $editing_post_id ) ) {
             $editing_post = get_post( $editing_post_id );
 
-            if ( $editing_post instanceof \WP_Post && WP_LOC_Admin_Settings::is_translatable( $editing_post->post_type ) ) {
+            if ( $editing_post instanceof \WP_Post && $this->should_show_title_translate_for_post( $editing_post ) ) {
                 $title_translate_config = [
                     'postId'      => $editing_post->ID,
                     'currentLang' => WP_LOC::instance()->db->get_element_language( $editing_post->ID, WP_LOC_DB::post_element_type( $editing_post->post_type ) ),
                     'targets'     => $this->get_title_translate_targets( $editing_post ),
                 ];
 
-                if ( $screen->is_block_editor ) {
+                if ( $screen->is_block_editor() ) {
                     $gutenberg_title_translate = $title_translate_config;
-                } elseif ( in_array( $screen->base, [ 'post', 'post-new' ], true ) ) {
+                } else {
                     $classic_title_translate = $title_translate_config;
                 }
             }
         }
 
-        if ( $screen && $screen->is_block_editor ) {
+        if ( $screen && $screen->is_block_editor() ) {
             $deps[] = 'wp-data';
             if ( $editing_post_id && get_post( $editing_post_id ) ) {
                 $editing_post = get_post( $editing_post_id );
@@ -145,12 +146,16 @@ class WP_LOC_Admin {
         ] );
     }
 
+    private function should_show_title_translate_for_post( \WP_Post $post ): bool {
+        return WP_LOC_Admin_Settings::is_translatable( (string) $post->post_type );
+    }
+
     public function add_title_translate_action( array $actions, \WP_Post $post ): array {
         if ( ! is_admin() || ! current_user_can( 'edit_post', $post->ID ) ) {
             return $actions;
         }
 
-        if ( ! WP_LOC_Admin_Settings::is_translatable( $post->post_type ) ) {
+        if ( ! $this->should_show_title_translate_for_post( $post ) ) {
             return $actions;
         }
 
@@ -483,6 +488,154 @@ class WP_LOC_Admin {
             );
             return $where;
         }, 10, 2 );
+    }
+
+    /**
+     * Keep the native Insert/edit Link modal scoped to the current editor language.
+     */
+    public function filter_link_query_by_language( array $query ): array {
+        if ( ! is_admin() ) {
+            return $query;
+        }
+
+        $post_types = $this->get_link_query_post_types( $query );
+        $has_translatable_post_type = false;
+
+        foreach ( $post_types as $post_type ) {
+            if ( WP_LOC_Admin_Settings::is_translatable( $post_type ) ) {
+                $has_translatable_post_type = true;
+                break;
+            }
+        }
+
+        if ( ! $has_translatable_post_type ) {
+            return $query;
+        }
+
+        $lang = ! empty( $query['lang'] ) && is_scalar( $query['lang'] )
+            ? WP_LOC_Routing::normalize_language_context( (string) $query['lang'] )
+            : $this->get_link_query_context_language();
+
+        if ( ! $lang || $lang === 'all' ) {
+            return $query;
+        }
+
+        $query['lang'] = $lang;
+        $query['suppress_filters'] = false;
+
+        return $query;
+    }
+
+    private function get_link_query_post_types( array $query ): array {
+        $post_type = $query['post_type'] ?? [];
+
+        if ( empty( $post_type ) || $post_type === 'any' ) {
+            $post_type = get_post_types( [ 'public' => true ], 'names' );
+        }
+
+        if ( is_string( $post_type ) ) {
+            $post_type = [ $post_type ];
+        }
+
+        if ( ! is_array( $post_type ) ) {
+            return [];
+        }
+
+        return array_values( array_filter( array_map( 'sanitize_key', $post_type ) ) );
+    }
+
+    private function get_link_query_context_language(): ?string {
+        $request_language = $this->get_language_from_request_args( $_REQUEST );
+
+        if ( $request_language ) {
+            return $request_language;
+        }
+
+        $request_context_language = $this->get_language_from_context_args( $_REQUEST );
+
+        if ( $request_context_language ) {
+            return $request_context_language;
+        }
+
+        $referer_context_language = $this->get_language_from_context_args( $this->get_referer_query_args() );
+
+        if ( $referer_context_language ) {
+            return $referer_context_language;
+        }
+
+        return self::get_admin_lang();
+    }
+
+    private function get_language_from_request_args( array $args ): ?string {
+        foreach ( [ 'wp_loc_edit_lang', 'wpml_edit_lang', 'wp_loc_lang', 'lang', 'wpml_lang', '_wpml_lang' ] as $key ) {
+            if ( empty( $args[ $key ] ) || ! is_scalar( $args[ $key ] ) ) {
+                continue;
+            }
+
+            $language = WP_LOC_Routing::normalize_language_context( sanitize_text_field( wp_unslash( (string) $args[ $key ] ) ) );
+
+            if ( $language ) {
+                return $language;
+            }
+        }
+
+        return null;
+    }
+
+    private function get_language_from_context_args( array $args ): ?string {
+        foreach ( [ '_acf_post_id', 'post_id', 'post', 'post_ID' ] as $key ) {
+            if ( empty( $args[ $key ] ) || ! is_numeric( $args[ $key ] ) ) {
+                continue;
+            }
+
+            $language = $this->get_post_context_language( (int) $args[ $key ] );
+
+            if ( $language ) {
+                return $language;
+            }
+        }
+
+        if ( ! empty( $args['tag_ID'] ) && ! empty( $args['taxonomy'] ) && is_numeric( $args['tag_ID'] ) && is_scalar( $args['taxonomy'] ) ) {
+            $taxonomy = sanitize_key( wp_unslash( (string) $args['taxonomy'] ) );
+
+            if ( $taxonomy && WP_LOC_Terms::is_translatable( $taxonomy ) ) {
+                return WP_LOC_Terms::get_term_language( (int) $args['tag_ID'], $taxonomy );
+            }
+        }
+
+        return null;
+    }
+
+    private function get_post_context_language( int $post_id ): ?string {
+        $post = get_post( $post_id );
+
+        if ( ! $post instanceof \WP_Post || ! WP_LOC_Admin_Settings::is_translatable( (string) $post->post_type ) ) {
+            return null;
+        }
+
+        return WP_LOC::instance()->db->get_element_language( $post_id, WP_LOC_DB::post_element_type( (string) $post->post_type ) );
+    }
+
+    private function get_referer_query_args(): array {
+        $referer = wp_get_referer();
+
+        if ( ! $referer && ! empty( $_SERVER['HTTP_REFERER'] ) && is_scalar( $_SERVER['HTTP_REFERER'] ) ) {
+            $referer = wp_unslash( (string) $_SERVER['HTTP_REFERER'] );
+        }
+
+        if ( ! $referer ) {
+            return [];
+        }
+
+        $query = wp_parse_url( $referer, PHP_URL_QUERY );
+
+        if ( ! is_string( $query ) || $query === '' ) {
+            return [];
+        }
+
+        parse_str( $query, $args );
+
+        return is_array( $args ) ? $args : [];
     }
 
     /**

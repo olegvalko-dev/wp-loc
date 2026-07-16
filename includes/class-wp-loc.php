@@ -27,6 +27,7 @@ class WP_LOC {
     public $github_updater;
     public $ai;
     public $yoast;
+    public $duplicate_post;
 
     public static function instance() {
         if ( self::$instance === null ) {
@@ -62,6 +63,7 @@ class WP_LOC {
             'class-wp-loc-menu-sync',
             'class-wp-loc-db-optimization-wizard',
             'class-wp-loc-github-updater',
+            'class-wp-loc-duplicate-post',
         ];
 
         foreach ( $includes as $file ) {
@@ -109,6 +111,7 @@ class WP_LOC {
             $this->language_editor = new WP_LOC_Admin_Language_Editor();
             $this->menu_sync       = new WP_LOC_Menu_Sync();
             $this->db_optimization_wizard = new WP_LOC_DB_Optimization_Wizard();
+            $this->duplicate_post  = new WP_LOC_Duplicate_Post();
         }
 
         // Compatibility layer (only when no other multilingual plugin is active)

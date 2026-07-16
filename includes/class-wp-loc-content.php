@@ -6,6 +6,13 @@ class WP_LOC_Content {
 
     private static $creating_translations = false;
     private static $syncing = false;
+    private static $deleting = false;
+
+    /**
+     * When true, the default new-post registration/auto-translation is suspended.
+     * Used by the Duplicate Post integration, which registers copies explicitly.
+     */
+    public static $suspend_new_post_registration = false;
 
     /**
      * Get multilingual taxonomies that should be synced for a post type.
@@ -183,7 +190,7 @@ class WP_LOC_Content {
      * Mark newly created posts
      */
     public function mark_new_post( int $post_id, \WP_Post $post, bool $update ): void {
-        if ( $update || self::$creating_translations ) return;
+        if ( $update || self::$creating_translations || self::$suspend_new_post_registration ) return;
 
         $translatable = apply_filters( 'wp_loc_translatable_post_types', [ 'post', 'page' ] );
         if ( ! in_array( $post->post_type, $translatable, true ) ) return;
@@ -195,7 +202,7 @@ class WP_LOC_Content {
      * Handle post save — register in icl_translations and optionally create duplicates
      */
     public function handle_save_post( int $post_id, \WP_Post $post, bool $update ): void {
-        if ( self::$creating_translations ) return;
+        if ( self::$creating_translations || self::$suspend_new_post_registration ) return;
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) return;
         if ( $post->post_status === 'auto-draft' ) return;
 
@@ -313,7 +320,7 @@ class WP_LOC_Content {
      * Sync post properties to all translations (both directions)
      */
     public function sync_translations( int $post_id, \WP_Post $post ): void {
-        if ( self::$syncing || self::$creating_translations ) return;
+        if ( self::$syncing || self::$creating_translations || self::$suspend_new_post_registration ) return;
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) return;
         if ( $post->post_status === 'auto-draft' ) return;
 
@@ -383,16 +390,49 @@ class WP_LOC_Content {
     }
 
     /**
-     * Clean up icl_translations when a post is deleted
+     * Permanently delete post translations and clean up icl_translations rows.
      */
     public function handle_delete_post( int $post_id ): void {
+        if ( self::$deleting ) return;
+
         $post = get_post( $post_id );
         if ( ! $post ) return;
 
-        $translatable = apply_filters( 'wp_loc_translatable_post_types', [ 'post', 'page' ] );
-        if ( ! in_array( $post->post_type, $translatable, true ) ) return;
-
+        $db = WP_LOC::instance()->db;
         $element_type = WP_LOC_DB::post_element_type( $post->post_type );
-        WP_LOC::instance()->db->delete_element( $post_id, $element_type );
+        $trid = $db->get_trid( $post_id, $element_type );
+
+        if ( ! $trid ) return;
+
+        $translatable = apply_filters( 'wp_loc_translatable_post_types', [ 'post', 'page' ] );
+        if ( ! in_array( $post->post_type, $translatable, true ) ) {
+            $db->delete_element( $post_id, $element_type );
+            return;
+        }
+
+        $translations = $db->get_element_translations( $trid, $element_type );
+
+        self::$deleting = true;
+
+        try {
+            foreach ( $translations as $translation ) {
+                $sibling_id = (int) $translation->element_id;
+
+                if ( $sibling_id === $post_id ) {
+                    continue;
+                }
+
+                $sibling = get_post( $sibling_id );
+                if ( $sibling instanceof \WP_Post && ! wp_delete_post( $sibling_id, true ) ) {
+                    continue;
+                }
+
+                $db->delete_element( $sibling_id, $element_type );
+            }
+        } finally {
+            self::$deleting = false;
+        }
+
+        $db->delete_element( $post_id, $element_type );
     }
 }
