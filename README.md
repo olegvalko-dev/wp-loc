@@ -241,4 +241,4 @@ GPLv2 or later.
 
 ## Author
 
-Vitalii Kaplia — [vitaliikaplia.com](https://vitaliikaplia.com/)
+Vitalii Kaplia — [kaplia.pro](https://kaplia.pro/)
