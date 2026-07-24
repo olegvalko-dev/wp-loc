@@ -16,10 +16,9 @@ Lightweight multilingual plugin for WordPress.
 - **Cascade delete for term translations** — deleting any translated term deletes the whole translation group
 - **Protected default category group** — default category and all its translations cannot be deleted
 - **Multilingual nav menus** — translated menu groups, translated menu items, language-aware menu locations, auto-created menu translations, and cascade deletion for menu translation groups
-- **Tools page** — Multilingual > Tools with tabbed utilities for WP Menus Sync, AI Translation, and Config Migration
+- **Tools page** — Multilingual > Tools with tabbed utilities for WP Menus Sync and Config Migration
 - **WP Menus Sync** — AJAX preview/apply for syncing menu structure from the default language to secondary languages
 - **AI-assisted custom menu links** — optional AI translation for `custom` nav menu items during menu sync, while preserving URLs and other menu item settings, with safe fallback when the AI provider refuses a short-field translation
-- **AI Translation tool** — TinyMCE-based AJAX translator for formatted HTML content, with translated content inserted back into the editor without reloading the page
 - **Config Migration tool** — detects legacy multilingual config files (`wpml-config.xml`), reads only translatable post types and taxonomies, generates lightweight `wp-loc-config.xml`, and can remove theme-level legacy config files
 - **Database Optimization Wizard** — appears in admin after activation, scans multilingual data left by another plugin, adopts compatible translation links, imports languages, detects translated post types/taxonomies/options, and removes obsolete service data after confirmation
 - **Manual language mapping during optimization** — the wizard auto-matches detected languages through a built-in registry, shows match confidence, and lets admins override the target WP-LOC language before applying cleanup
@@ -38,7 +37,7 @@ Lightweight multilingual plugin for WordPress.
 - **Yoast SEO compatibility** — localized `wpseo_titles` / `wpseo_social` / `wpseo_rss` options, translated primary category resolution, copied Yoast term SEO meta for translated terms, multilingual sitemap alternate links, stripped category-base compatibility, and Yoast indexable invalidation after multilingual updates
 - **Localized options** — `blogname`, `blogdescription`, `page_on_front`, `page_for_posts`, plus options registered through `wp_loc_multilingual_options` or compatible `wpml_multilingual_options`, per language and with localized front page / posts page routing
 - **Custom settings page support** — localized options are displayed and saved correctly on WordPress settings pages, including custom submenu pages under Settings that register option names dynamically
-- **AI settings** — choose OpenAI / Claude / Gemini, store API keys, and enable AI translation for custom menu links during menu sync
+- **AI settings** — detect configured WordPress AI provider connectors, choose an available provider and text-generation model, and enable AI translation for custom menu links during menu sync
 - **Translation workflow settings** — control automatic creation of post, term, and menu translations and enable multilingual behavior for public or custom non-public post types and taxonomies from **Multilingual > Settings > Content Translation**
 - **Sync policy settings** — control taxonomy sync, featured image sync, and shared post-attribute sync for translation groups
 - **Switcher behavior settings** — control whether the frontend switcher shows flags and names, hides the current language, hides untranslated targets, or falls back to language home URLs
@@ -59,6 +58,13 @@ Lightweight multilingual plugin for WordPress.
 
 - WordPress 6.0+
 - PHP 8.1+
+- WordPress 7.0+ and a configured AI provider connector for AI-assisted translation features
+
+## Development
+
+- The project uses `prepros.config`, but routine asset builds are handled automatically by the Mini Prepros watcher in PhpStorm; the desktop Prepros application does not need to be opened
+- Edit `assets/scss/admin.scss`, its imported partials, `assets/js/admin.js`, or prepended JavaScript sources only; Mini Prepros rebuilds `assets/css/admin.min.css` and `assets/js/admin.min.js`
+- Never edit the generated `.min.css` or `.min.js` files manually; after source changes, verify that the watcher updated both configured outputs
 
 ## Installation
 
@@ -69,7 +75,7 @@ Lightweight multilingual plugin for WordPress.
 5. Configure language slugs, display names and ordering in **Multilingual > Languages**
 6. Select or review translatable post types and taxonomies in **Multilingual > Settings**
 7. Configure **Multilingual > Settings** tabs for content workflow, switcher behavior, integrations, and AI provider settings
-8. Use **Multilingual > Tools** for WP Menus Sync, the AI Translation tool, and Config Migration
+8. Use **Multilingual > Tools** for WP Menus Sync and Config Migration
 
 ## Usage
 
@@ -121,15 +127,16 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - WP-LOC auto-creates sibling menus in the other active languages
 - Menu locations are assigned from the default-language menu and resolved automatically per language on the frontend
 - Use **Multilingual > Tools > WP Menus Sync** to sync structure/order/options from the default-language menu to translated menus
-- If **Try to translate custom nav menu links with AI during menu sync** is enabled in **Multilingual > Settings > Content Translation**, custom menu links are translated with the selected AI engine during sync; otherwise they are duplicated 1:1 with the same title, URL, and item settings
+- If **Try to translate custom nav menu links with AI during menu sync** is enabled in **Multilingual > Settings > Content Translation**, custom menu links are translated with the selected AI provider and model during sync; otherwise they are duplicated 1:1 with the same title, URL, and item settings
 - If an AI provider returns a refusal or unusable short-text response for a custom menu link field, WP-LOC keeps the original field value instead of saving the refusal text into the translated menu item
 - Automatic menu creation can be disabled from **Multilingual > Settings > Content Translation** if you prefer to create translated menus manually
 
-### AI tools
+### AI integration
 
-- In **Multilingual > Settings > AI**, choose the translation engine (`OpenAI`, `Claude`, or `Gemini`) and provide the matching API key
-- In **Multilingual > Tools > AI Translation**, paste or write formatted content in the TinyMCE editor, choose a target language, and translate it via AJAX without reloading the page
-- The translated HTML is inserted back into the editor while preserving formatting
+- Install and configure an official AI provider from **Settings > Connectors** in WordPress 7.0 or newer; WP-LOC does not store provider API keys
+- In **Multilingual > Settings > AI**, choose one of the connected providers and one of its available text-generation models
+- Provider and model availability comes from the WordPress AI Client registry, so the choices follow the installed provider connectors instead of a hardcoded model list
+- The selected provider and model are used for AI-assisted title, term-name, and custom menu-link translations
 
 ### Config migration
 

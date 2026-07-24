@@ -4,31 +4,64 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class WP_LOC_AI {
 
-    public static function test_provider( string $provider, string $api_key, ?string $model = null ) {
-        $provider = sanitize_key( $provider );
-        $api_key = trim( $api_key );
-        $model = is_string( $model ) ? trim( $model ) : null;
+    public static function is_core_ai_available(): bool {
+        return function_exists( 'wp_ai_client_prompt' )
+            && class_exists( '\\WordPress\\AiClient\\AiClient' );
+    }
 
-        if ( $api_key === '' ) {
-            return new WP_Error( 'wp_loc_ai_missing_api_key', __( 'API key is empty.', 'wp-loc' ) );
+    public static function get_connected_providers(): array {
+        if ( ! self::is_core_ai_available() ) {
+            return [];
         }
 
-        $prompt = 'Reply with OK only.';
+        try {
+            $registry = \WordPress\AiClient\AiClient::defaultRegistry();
+            $providers = [];
 
-        $response = match ( $provider ) {
-            'claude' => self::get_claude_response( $prompt, null, $api_key, $model ),
-            'gemini' => self::get_gemini_response( $prompt, null, $api_key, $model ),
-            default  => self::get_openai_response( $prompt, null, $api_key, $model ),
-        };
+            foreach ( $registry->getRegisteredProviderIds() as $provider_id ) {
+                if ( ! $registry->isProviderConfigured( $provider_id ) ) {
+                    continue;
+                }
 
-        if ( is_wp_error( $response ) ) {
-            return $response;
+                $provider_class = $registry->getProviderClassName( $provider_id );
+                $metadata = $provider_class::metadata();
+                $providers[ $provider_id ] = $metadata->getName();
+            }
+
+            return $providers;
+        } catch ( \Throwable $exception ) {
+            return [];
+        }
+    }
+
+    public static function get_provider_models( string $provider_id ): array {
+        $provider_id = sanitize_key( $provider_id );
+
+        if ( $provider_id === '' || ! self::is_core_ai_available() ) {
+            return [];
         }
 
-        return [
-            'provider' => $provider,
-            'message'  => __( 'Connection successful.', 'wp-loc' ),
-        ];
+        try {
+            $registry = \WordPress\AiClient\AiClient::defaultRegistry();
+
+            if ( ! $registry->hasProvider( $provider_id ) || ! $registry->isProviderConfigured( $provider_id ) ) {
+                return [];
+            }
+
+            $requirements = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements(
+                [ \WordPress\AiClient\Providers\Models\Enums\CapabilityEnum::textGeneration() ],
+                []
+            );
+            $models = [];
+
+            foreach ( $registry->findProviderModelsMetadataForSupport( $provider_id, $requirements ) as $metadata ) {
+                $models[ $metadata->getId() ] = $metadata->getName();
+            }
+
+            return $models;
+        } catch ( \Throwable $exception ) {
+            return [];
+        }
     }
 
     public static function get_target_language_name( string $lang ): string {
@@ -60,13 +93,49 @@ class WP_LOC_AI {
     }
 
     public static function get_response( string $prompt, ?string $system = null ) {
-        $engine = WP_LOC_Admin_Settings::get_ai_engine();
+        if ( trim( $prompt ) === '' ) {
+            return new WP_Error( 'wp_loc_ai_empty_prompt', __( 'The AI prompt is empty.', 'wp-loc' ) );
+        }
 
-        return match ( $engine ) {
-            'claude' => self::get_claude_response( $prompt, $system ),
-            'gemini' => self::get_gemini_response( $prompt, $system ),
-            default  => self::get_openai_response( $prompt, $system ),
-        };
+        if ( ! self::is_core_ai_available() ) {
+            return new WP_Error( 'wp_loc_ai_client_unavailable', __( 'AI translation requires WordPress 7.0 or newer.', 'wp-loc' ) );
+        }
+
+        $provider_id = WP_LOC_Admin_Settings::get_ai_engine();
+
+        if ( $provider_id === '' ) {
+            return new WP_Error( 'wp_loc_ai_provider_unavailable', __( 'No connected AI provider is available.', 'wp-loc' ) );
+        }
+
+        $model_id = WP_LOC_Admin_Settings::get_ai_model( $provider_id );
+
+        if ( $model_id === '' ) {
+            return new WP_Error( 'wp_loc_ai_model_unavailable', __( 'No text-generation model is available for the selected AI provider.', 'wp-loc' ) );
+        }
+
+        try {
+            $registry = \WordPress\AiClient\AiClient::defaultRegistry();
+            $model = $registry->getProviderModel( $provider_id, $model_id );
+            $builder = wp_ai_client_prompt( $prompt )->using_model( $model );
+
+            if ( is_string( $system ) && trim( $system ) !== '' ) {
+                $builder->using_system_instruction( $system );
+            }
+
+            $response = $builder->generate_text();
+        } catch ( \Throwable $exception ) {
+            return new WP_Error( 'wp_loc_ai_request_failed', $exception->getMessage() );
+        }
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        if ( ! is_string( $response ) || trim( $response ) === '' ) {
+            return new WP_Error( 'wp_loc_ai_empty_response', __( 'The AI provider returned an empty response.', 'wp-loc' ) );
+        }
+
+        return $response;
     }
 
     public static function translate_content( string $content, string $target_lang ): string {
@@ -200,159 +269,4 @@ class WP_LOC_AI {
     }
 
 
-    public static function get_openai_response( string $prompt, ?string $system = null, ?string $api_key_override = null, ?string $model_override = null ) {
-        $api_key = $api_key_override ?: WP_LOC_Admin_Settings::get_openai_api_key();
-        $model = $model_override ?: WP_LOC_Admin_Settings::get_openai_model();
-
-        if ( ! $api_key || ! $prompt ) {
-            return new WP_Error( 'wp_loc_ai_openai_config', __( 'OpenAI is not configured.', 'wp-loc' ) );
-        }
-
-        $payload = [
-            'model'             => $model,
-            'input'             => $prompt,
-            'max_output_tokens' => 2048,
-        ];
-
-        if ( $system ) {
-            $payload['instructions'] = $system;
-        }
-
-        $response = wp_remote_post(
-            'https://api.openai.com/v1/responses',
-            [
-                'headers' => [
-                    'Content-Type'  => 'application/json',
-                    'Authorization' => 'Bearer ' . $api_key,
-                ],
-                'body'    => wp_json_encode( $payload, JSON_UNESCAPED_UNICODE ),
-                'timeout' => 45,
-            ]
-        );
-
-        if ( is_wp_error( $response ) ) {
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
-
-        if ( $code !== 200 ) {
-            $message = $data['error']['message'] ?? ( 'OpenAI HTTP ' . $code );
-            return new WP_Error( 'wp_loc_ai_openai_http', $message, [ 'status' => $code, 'body' => $body ] );
-        }
-
-        if ( ! empty( $data['output'][0]['content'] ) && is_array( $data['output'][0]['content'] ) ) {
-            foreach ( $data['output'][0]['content'] as $content_part ) {
-                if ( isset( $content_part['type'], $content_part['text'] ) && $content_part['type'] === 'output_text' ) {
-                    return $content_part['text'];
-                }
-            }
-        }
-
-        return new WP_Error( 'wp_loc_ai_openai_payload', __( 'OpenAI returned an empty response.', 'wp-loc' ) );
-    }
-
-    public static function get_claude_response( string $prompt, ?string $system = null, ?string $api_key_override = null, ?string $model_override = null ) {
-        $api_key = $api_key_override ?: WP_LOC_Admin_Settings::get_claude_api_key();
-        $model = $model_override ?: WP_LOC_Admin_Settings::get_claude_model();
-
-        if ( ! $api_key || ! $prompt ) {
-            return new WP_Error( 'wp_loc_ai_claude_config', __( 'Claude is not configured.', 'wp-loc' ) );
-        }
-
-        $payload = [
-            'model' => $model,
-            'max_tokens' => 2048,
-            'messages' => [
-                [
-                    'role' => 'user',
-                    'content' => $prompt,
-                ],
-            ],
-        ];
-
-        if ( $system ) {
-            $payload['system'] = $system;
-        }
-
-        $response = wp_remote_post(
-            'https://api.anthropic.com/v1/messages',
-            [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'x-api-key' => $api_key,
-                    'anthropic-version' => '2023-06-01',
-                ],
-                'body' => wp_json_encode( $payload, JSON_UNESCAPED_UNICODE ),
-                'timeout' => 45,
-            ]
-        );
-
-        if ( is_wp_error( $response ) ) {
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
-
-        if ( $code !== 200 ) {
-            $message = $data['error']['message'] ?? ( 'Claude HTTP ' . $code );
-            return new WP_Error( 'wp_loc_ai_claude_http', $message, [ 'status' => $code, 'body' => $body ] );
-        }
-
-        return $data['content'][0]['text'] ?? new WP_Error( 'wp_loc_ai_claude_payload', __( 'Claude returned an empty response.', 'wp-loc' ) );
-    }
-
-    public static function get_gemini_response( string $prompt, ?string $system = null, ?string $api_key_override = null, ?string $model_override = null ) {
-        $api_key = $api_key_override ?: WP_LOC_Admin_Settings::get_gemini_api_key();
-        $model = $model_override ?: WP_LOC_Admin_Settings::get_gemini_model();
-
-        if ( ! $api_key || ! $prompt ) {
-            return new WP_Error( 'wp_loc_ai_gemini_config', __( 'Gemini is not configured.', 'wp-loc' ) );
-        }
-
-        $text = $system ? $system . "\n\n" . $prompt : $prompt;
-        $payload = [
-            'contents' => [
-                [
-                    'role' => 'user',
-                    'parts' => [
-                        [ 'text' => $text ],
-                    ],
-                ],
-            ],
-            'generationConfig' => [
-                'maxOutputTokens' => 2048,
-            ],
-        ];
-
-        $response = wp_remote_post(
-            'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode( $model ) . ':generateContent?key=' . rawurlencode( $api_key ),
-            [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                ],
-                'body' => wp_json_encode( $payload, JSON_UNESCAPED_UNICODE ),
-                'timeout' => 45,
-            ]
-        );
-
-        if ( is_wp_error( $response ) ) {
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
-
-        if ( $code !== 200 ) {
-            $message = $data['error']['message'] ?? ( 'Gemini HTTP ' . $code );
-            return new WP_Error( 'wp_loc_ai_gemini_http', $message, [ 'status' => $code, 'body' => $body ] );
-        }
-
-        return $data['candidates'][0]['content']['parts'][0]['text'] ?? new WP_Error( 'wp_loc_ai_gemini_payload', __( 'Gemini returned an empty response.', 'wp-loc' ) );
-    }
 }

@@ -1067,68 +1067,15 @@ td.column-wp_loc_translations {
   color: #50575e;
 }
 
-.wp-loc-ai-translate-tool {
-  position: relative;
-}
-
 .wp-loc-tools-page {
   .nav-tab-wrapper {
     margin-bottom: 18px;
   }
 }
 
-.wp-loc-ai-translate-editor {
-  margin-top: 12px;
-
-  .wp-editor-wrap {
-    margin: 0;
-  }
-}
-
-.wp-loc-ai-translate-actions {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.wp-loc-ai-target-lang {
-  min-width: 220px;
-}
-
-.wp-loc-ai-translate-feedback {
-  margin-top: 12px;
-}
-
-.wp-loc-ai-key-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.wp-loc-ai-model-row {
-  margin-top: 10px;
-
-  .wp-loc-ai-model-select {
-    min-width: 320px;
-    max-width: 100%;
-  }
-}
-
-.wp-loc-ai-key-status {
-  font-weight: 500;
-  color: #50575e;
-
-  &.is-success {
-    color: #1f6f43;
-  }
-
-  &.is-error {
-    color: #b32d2e;
-  }
+.wp-loc-ai-model-select {
+  min-width: 320px;
+  max-width: 100%;
 }
 
 .wp-loc-config-panel {
