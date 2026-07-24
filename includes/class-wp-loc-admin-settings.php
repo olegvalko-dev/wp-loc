@@ -33,6 +33,7 @@ class WP_LOC_Admin_Settings {
     const TAB_INTEGRATIONS = 'integrations';
     const TAB_AI = 'ai';
     const EXCLUDED_SELECTABLE_POST_TYPES = [ 'attachment', 'nav_menu_item', 'revision' ];
+    const EXCLUDED_SELECTABLE_TAXONOMIES = [ 'nav_menu', 'post_format' ];
 
     private static $detected_translatable_post_types = null;
     private static $detected_translatable_post_type_counts = null;
@@ -306,11 +307,9 @@ TWIG;
              WHERE element_type LIKE 'tax\_%'"
         );
 
-        $excluded = [ 'nav_menu' ];
-
         return self::$detected_translatable_taxonomies = array_values( array_filter(
             array_map( 'sanitize_key', array_map( 'strval', (array) $taxonomies ) ),
-            static fn( string $taxonomy ): bool => $taxonomy !== '' && ! in_array( $taxonomy, $excluded, true ) && taxonomy_exists( $taxonomy )
+            static fn( string $taxonomy ): bool => $taxonomy !== '' && ! in_array( $taxonomy, self::EXCLUDED_SELECTABLE_TAXONOMIES, true ) && taxonomy_exists( $taxonomy )
         ) );
     }
 
@@ -326,7 +325,24 @@ TWIG;
                     return false;
                 }
 
-                return ! empty( $post_type->public ) || ! empty( $post_type->show_ui );
+                return ! empty( $post_type->public ) || empty( $post_type->_builtin );
+            }
+        );
+    }
+
+    private static function get_selectable_taxonomies(): array {
+        return array_filter(
+            get_taxonomies( [], 'objects' ),
+            static function ( $taxonomy ): bool {
+                if ( ! isset( $taxonomy->name ) || in_array( $taxonomy->name, self::EXCLUDED_SELECTABLE_TAXONOMIES, true ) ) {
+                    return false;
+                }
+
+                if ( ! empty( $taxonomy->_builtin ) && empty( $taxonomy->public ) ) {
+                    return false;
+                }
+
+                return ! empty( $taxonomy->public ) || empty( $taxonomy->_builtin );
             }
         );
     }
@@ -355,6 +371,22 @@ TWIG;
                         ?>
                     </span>
                 <?php endif; ?>
+            </label>
+            <?php
+        endforeach;
+    }
+
+    private function render_taxonomy_checkboxes( array $taxonomies, array $selected ): void {
+        foreach ( $taxonomies as $taxonomy ) :
+            ?>
+            <label class="wp-loc-settings-label">
+                <input type="checkbox"
+                       name="wp_loc_taxonomies[]"
+                       value="<?php echo esc_attr( $taxonomy->name ); ?>"
+                       <?php checked( in_array( $taxonomy->name, $selected, true ) ); ?>
+                />
+                <span><?php echo esc_html( $taxonomy->labels->name ); ?></span>
+                <code>(<?php echo esc_html( $taxonomy->name ); ?>)</code>
             </label>
             <?php
         endforeach;
@@ -600,8 +632,15 @@ TWIG;
             $all_post_types,
             static fn( $post_type ): bool => empty( $post_type->public )
         );
-        $all_taxonomies = get_taxonomies( [ 'public' => true ], 'objects' );
-        unset( $all_taxonomies['post_format'], $all_taxonomies['nav_menu'] );
+        $all_taxonomies = self::get_selectable_taxonomies();
+        $public_taxonomies = array_filter(
+            $all_taxonomies,
+            static fn( $taxonomy ): bool => ! empty( $taxonomy->public )
+        );
+        $non_public_taxonomies = array_filter(
+            $all_taxonomies,
+            static fn( $taxonomy ): bool => empty( $taxonomy->public )
+        );
 
         $saved = get_option( self::OPTION_KEY );
         $selected = ( $saved !== false && is_array( $saved ) )
@@ -715,17 +754,15 @@ TWIG;
                                 <th scope="row"><?php esc_html_e( 'Translatable Taxonomies', 'wp-loc' ); ?></th>
                                 <td>
                                     <fieldset class="wp-loc-settings-stack">
-                                        <?php foreach ( $all_taxonomies as $taxonomy ) : ?>
-                                            <label class="wp-loc-settings-label">
-                                                <input type="checkbox"
-                                                       name="wp_loc_taxonomies[]"
-                                                       value="<?php echo esc_attr( $taxonomy->name ); ?>"
-                                                       <?php checked( in_array( $taxonomy->name, $selected_taxonomies, true ) ); ?>
-                                                />
-                                                <span><?php echo esc_html( $taxonomy->labels->name ); ?></span>
-                                                <code>(<?php echo esc_html( $taxonomy->name ); ?>)</code>
-                                            </label>
-                                        <?php endforeach; ?>
+                                        <?php if ( $public_taxonomies ) : ?>
+                                            <strong><?php esc_html_e( 'Public taxonomies', 'wp-loc' ); ?></strong>
+                                            <?php $this->render_taxonomy_checkboxes( $public_taxonomies, $selected_taxonomies ); ?>
+                                        <?php endif; ?>
+
+                                        <?php if ( $non_public_taxonomies ) : ?>
+                                            <strong><?php esc_html_e( 'Non-public taxonomies', 'wp-loc' ); ?></strong>
+                                            <?php $this->render_taxonomy_checkboxes( $non_public_taxonomies, $selected_taxonomies ); ?>
+                                        <?php endif; ?>
                                     </fieldset>
                                     <p class="description"><?php esc_html_e( 'Select which taxonomies should support multilingual translations.', 'wp-loc' ); ?></p>
                                 </td>
