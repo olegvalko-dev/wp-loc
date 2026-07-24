@@ -475,6 +475,12 @@ msgstr "Публичные типы записей"
 msgid "Non-public post types"
 msgstr "Непубличные типы записей"
 
+msgid "Public taxonomies"
+msgstr "Публичные таксономии"
+
+msgid "Non-public taxonomies"
+msgstr "Непубличные таксономии"
+
 #: includes/class-wp-loc-admin-settings.php:337
 #, php-format
 msgid "%s translation record found."
