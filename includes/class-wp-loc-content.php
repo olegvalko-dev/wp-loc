@@ -29,14 +29,16 @@ class WP_LOC_Content {
     }
 
     /**
-     * Build target-language term IDs for a taxonomy based on the source post terms.
+     * Build target-language term IDs from relationships that belong to the source language.
      *
      * @return int[]
      */
     private function get_translated_post_term_ids( int $post_id, string $taxonomy, string $target_lang, ?string $source_lang = null ): array {
-        $source_term_ids = wp_get_object_terms( $post_id, $taxonomy, [
-            'fields' => 'ids',
-        ] );
+        $source_term_ids = WP_LOC_Terms::without_language_filter(
+            static fn() => wp_get_object_terms( $post_id, $taxonomy, [
+                'fields' => 'ids',
+            ] )
+        );
 
         if ( is_wp_error( $source_term_ids ) || empty( $source_term_ids ) ) {
             return [];
@@ -49,12 +51,22 @@ class WP_LOC_Content {
         }
 
         $target_term_ids = [];
-        $fallback_term_ids = [];
 
         foreach ( $source_term_ids as $source_term_id ) {
-            $resolved_source_lang = $source_lang ?: WP_LOC_Terms::get_term_language( $source_term_id, $taxonomy ) ?: WP_LOC_Terms::get_context_language();
+            $term_lang = WP_LOC_Terms::get_term_language( $source_term_id, $taxonomy );
 
-            if ( $resolved_source_lang === $target_lang ) {
+            // A translated post must never retain a registered term from another language.
+            if ( $source_lang && $term_lang && $term_lang !== $source_lang ) {
+                continue;
+            }
+
+            // Legacy/unregistered terms are language-neutral until they are adopted.
+            if ( ! $term_lang ) {
+                $target_term_ids[] = $source_term_id;
+                continue;
+            }
+
+            if ( $term_lang === $target_lang ) {
                 $target_term_ids[] = $source_term_id;
                 continue;
             }
@@ -63,25 +75,21 @@ class WP_LOC_Content {
 
             if ( $translated_term_id ) {
                 $target_term_ids[] = $translated_term_id;
-            } else {
-                $fallback_term_ids[] = $source_term_id;
             }
         }
 
-        $term_ids = ! empty( $target_term_ids ) ? $target_term_ids : $fallback_term_ids;
-
-        return array_values( array_unique( array_map( 'intval', $term_ids ) ) );
+        return array_values( array_unique( array_map( 'intval', $target_term_ids ) ) );
     }
 
     /**
      * Sync multilingual taxonomy relationships from one post to all its translations.
      */
-    private function sync_post_terms( int $post_id, \WP_Post $post, array $translations, ?string $source_lang = null ): void {
+    private function sync_post_terms( int $post_id, \WP_Post $post, array $translations, ?string $source_lang = null, ?array $taxonomies = null ): void {
         if ( empty( $translations ) || ! class_exists( 'WP_LOC_Terms' ) ) {
             return;
         }
 
-        $taxonomies = $this->get_syncable_taxonomies( $post->post_type );
+        $taxonomies = $taxonomies ?: $this->get_syncable_taxonomies( $post->post_type );
 
         if ( empty( $taxonomies ) ) {
             return;
@@ -98,8 +106,8 @@ class WP_LOC_Content {
     }
 
     /**
-     * Assign taxonomy terms while temporarily switching the admin term context
-     * to the target language so WP core resolves translated term IDs correctly.
+     * Assign taxonomy terms in the target context while exposing all raw relationships
+     * so WordPress can replace stale terms and resolve the exact translated IDs.
      *
      * @param int[] $term_ids
      */
@@ -116,24 +124,28 @@ class WP_LOC_Content {
             $_COOKIE['admin_lang'] = $target_locale;
         }
 
-        wp_set_object_terms( $post_id, $term_ids, $taxonomy, false );
+        try {
+            WP_LOC_Terms::without_language_filter(
+                static fn() => wp_set_object_terms( $post_id, $term_ids, $taxonomy, false )
+            );
+        } finally {
+            if ( $previous_lang !== null ) {
+                $_REQUEST['lang'] = $previous_lang;
+            } else {
+                unset( $_REQUEST['lang'] );
+            }
 
-        if ( $previous_lang !== null ) {
-            $_REQUEST['lang'] = $previous_lang;
-        } else {
-            unset( $_REQUEST['lang'] );
-        }
+            if ( $previous_wp_loc_lang !== null ) {
+                $_REQUEST['wp_loc_lang'] = $previous_wp_loc_lang;
+            } else {
+                unset( $_REQUEST['wp_loc_lang'] );
+            }
 
-        if ( $previous_wp_loc_lang !== null ) {
-            $_REQUEST['wp_loc_lang'] = $previous_wp_loc_lang;
-        } else {
-            unset( $_REQUEST['wp_loc_lang'] );
-        }
-
-        if ( $previous_admin_lang_cookie !== null ) {
-            $_COOKIE['admin_lang'] = $previous_admin_lang_cookie;
-        } else {
-            unset( $_COOKIE['admin_lang'] );
+            if ( $previous_admin_lang_cookie !== null ) {
+                $_COOKIE['admin_lang'] = $previous_admin_lang_cookie;
+            } else {
+                unset( $_COOKIE['admin_lang'] );
+            }
         }
     }
 
@@ -141,7 +153,59 @@ class WP_LOC_Content {
         add_action( 'wp_insert_post', [ $this, 'mark_new_post' ], 10, 3 );
         add_action( 'save_post', [ $this, 'handle_save_post' ], 20, 3 );
         add_action( 'save_post', [ $this, 'sync_translations' ], 30, 2 );
+        add_action( 'set_object_terms', [ $this, 'handle_set_object_terms' ], 20, 4 );
         add_action( 'before_delete_post', [ $this, 'handle_delete_post' ] );
+    }
+
+    /**
+     * Normalize and sync a multilingual taxonomy immediately after its relationships change.
+     *
+     * Gutenberg and REST assign terms after save_post, so save_post alone cannot reliably
+     * keep translated posts synchronized or remove stale foreign-language relationships.
+     */
+    public function handle_set_object_terms( int $object_id, $terms, array $term_taxonomy_ids, string $taxonomy ): void {
+        if ( self::$syncing || self::$creating_translations || self::$suspend_new_post_registration ) {
+            return;
+        }
+
+        $post = get_post( $object_id );
+        if ( ! $post instanceof \WP_Post ) {
+            return;
+        }
+
+        $translatable = apply_filters( 'wp_loc_translatable_post_types', [ 'post', 'page' ] );
+        if ( ! in_array( $post->post_type, $translatable, true ) || ! in_array( $taxonomy, $this->get_syncable_taxonomies( $post->post_type ), true ) ) {
+            return;
+        }
+
+        $db = WP_LOC::instance()->db;
+        $element_type = WP_LOC_DB::post_element_type( $post->post_type );
+        $source_lang = $db->get_element_language( $object_id, $element_type );
+
+        // New posts may receive terms before WP-LOC registers their language. save_post
+        // performs the same normalization after registration in that request flow.
+        if ( ! $source_lang ) {
+            return;
+        }
+
+        $trid = $db->get_trid( $object_id, $element_type );
+        $translations = $trid ? $db->get_element_translations( $trid, $element_type ) : [];
+
+        if ( ! WP_LOC_Admin_Settings::should_sync_post_taxonomies() || empty( $translations ) ) {
+            $translations = [
+                $source_lang => (object) [
+                    'element_id' => $object_id,
+                ],
+            ];
+        }
+
+        self::$syncing = true;
+
+        try {
+            $this->sync_post_terms( $object_id, $post, $translations, $source_lang, [ $taxonomy ] );
+        } finally {
+            self::$syncing = false;
+        }
     }
 
     /**

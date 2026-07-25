@@ -7,7 +7,7 @@ Lightweight multilingual plugin for WordPress.
 - **Language management** — Multilingual > Languages page with drag-and-drop ordering (auto-saves via AJAX)
 - **Automatic language detection** — install a language in WP General Settings, it auto-appears in WP-LOC. Delete from WP-LOC — removes language files too.
 - **Post/page translations** — auto-create translation drafts, translation metabox in editor with per-language `+` button for on-demand creation
-- **Bidirectional post taxonomy sync** — when a translated post changes its multilingual categories/tags/custom taxonomies, sibling posts receive the mapped term translations in their own language
+- **Bidirectional post taxonomy sync** — when a translated post changes its multilingual categories/tags/custom taxonomies, sibling posts receive the mapped term translations in their own language and stale foreign-language relationships are removed
 - **Taxonomy/term translations** — migration-compatible term translation groups for `category`, `post_tag`, and selected custom taxonomies
 - **Term translation UI** — translation column in term lists, translation panel on term edit screens, and per-language `+` buttons for on-demand term translation creation
 - **Automatic term translation creation** — creating a term can auto-create sibling translations in all active languages
