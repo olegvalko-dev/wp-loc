@@ -66,7 +66,7 @@ class WP_LOC_GitHub_Updater {
             'name' => 'WP-LOC',
             'slug' => $this->get_slug(),
             'version' => $version,
-            'author' => '<a href="https://vitaliikaplia.com/">Vitalii Kaplia</a>',
+            'author' => '<a href="https://kaplia.pro/">Vitalii Kaplia</a>',
             'homepage' => $this->get_repository_url(),
             'requires' => '6.0',
             'requires_php' => '8.1',

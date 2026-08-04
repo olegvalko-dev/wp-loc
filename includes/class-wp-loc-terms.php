@@ -9,6 +9,7 @@ class WP_LOC_Terms {
     private static bool $cascading_delete = false;
     private static bool $creating_translations = false;
     private static bool $syncing_parent = false;
+    private static int $query_filter_suspension_depth = 0;
     private static ?string $term_link_lang_override = null;
 
     public function __construct() {
@@ -43,6 +44,21 @@ class WP_LOC_Terms {
         $default_taxonomies = [ 'category', 'post_tag' ];
 
         return apply_filters( 'wp_loc_translatable_taxonomies', $default_taxonomies );
+    }
+
+    /**
+     * Run an internal term operation without language-scoping its lookups or objects.
+     *
+     * @return mixed
+     */
+    public static function without_language_filter( callable $callback ) {
+        self::$query_filter_suspension_depth++;
+
+        try {
+            return $callback();
+        } finally {
+            self::$query_filter_suspension_depth = max( 0, self::$query_filter_suspension_depth - 1 );
+        }
     }
 
     /**
@@ -931,6 +947,10 @@ class WP_LOC_Terms {
      * Skip term SQL filtering for internal/core lookups that should remain raw.
      */
     private function should_skip_terms_filter(): bool {
+        if ( self::$query_filter_suspension_depth > 0 ) {
+            return true;
+        }
+
         $trace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 20 );
         $functions = array_map(
             static function ( array $frame ): string {
@@ -1745,7 +1765,7 @@ class WP_LOC_Terms {
      * Adjust a term object to the current language.
      */
     public function adjust_term_to_current_language( $term, $taxonomy ) {
-        if ( self::$adjusting_term || ! $term instanceof \WP_Term ) return $term;
+        if ( self::$adjusting_term || self::$query_filter_suspension_depth > 0 || ! $term instanceof \WP_Term ) return $term;
         if ( is_admin() ) return $term;
         if ( ! $taxonomy || ! self::is_translatable( $taxonomy ) ) return $term;
 

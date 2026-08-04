@@ -26,9 +26,10 @@ class WP_LOC_Routing {
         add_filter( 'wp_unique_post_slug', [ $this, 'allow_duplicate_slugs' ], 99, 6 );
 
         add_filter( 'home_url', [ $this, 'filter_home_url' ], 10, 4 );
-        add_filter( 'page_link', [ $this, 'add_lang_prefix_to_link' ], 10, 2 );
-        add_filter( 'post_link', [ $this, 'add_lang_prefix_to_link' ], 10, 2 );
-        add_filter( 'post_type_link', [ $this, 'add_lang_prefix_to_link' ], 10, 2 );
+        // Apply the language prefix after themes/plugins finish building custom permalink paths.
+        add_filter( 'page_link', [ $this, 'add_lang_prefix_to_link' ], 9999, 2 );
+        add_filter( 'post_link', [ $this, 'add_lang_prefix_to_link' ], 9999, 2 );
+        add_filter( 'post_type_link', [ $this, 'add_lang_prefix_to_link' ], 9999, 2 );
         add_action( 'init', [ $this, 'maybe_flush_rewrite_rules' ] );
     }
 

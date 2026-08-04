@@ -19,11 +19,11 @@ includes/
   class-wp-loc-admin.php            → Admin bar switcher, post filtering, translation metabox, AJAX translation creation
   class-wp-loc-admin-languages.php  → Multilingual > Languages page (WP_List_Table, AJAX sort, language file cleanup)
   class-wp-loc-admin-settings.php   → Multilingual > Settings page (tabs for content, switcher, AI settings)
-  class-wp-loc-ai.php               → AI provider wrapper (OpenAI / Claude / Gemini) and HTML-safe translation helpers
+  class-wp-loc-ai.php               → WordPress AI Client / Connectors adapter and HTML-safe translation helpers
   class-wp-loc-content.php          → Auto-create translation drafts for new posts, sync shared post props and multilingual taxonomy assignments
   class-wp-loc-frontend.php         → Lang switcher, hreflang, canonical, html lang attr, non-translatable post type support
   class-wp-loc-menus.php            → WPML-like multilingual nav menus, menu translation groups, menu item cloning, menu assignment mapping
-  class-wp-loc-menu-sync.php        → Multilingual > Tools page (tabs for WP Menus Sync, AI Translation, Config Migration)
+  class-wp-loc-menu-sync.php        → Multilingual > Tools page (tabs for WP Menus Sync and Config Migration)
   class-wp-loc-options.php          → Localized WP options (blogname, page_on_front, custom registered options, etc.)
   class-wp-loc-compat.php           → Third-party compatibility layer (icl_object_id, $sitepress, wpml_* filters/actions, nav_menu/object language helpers)
   class-wp-loc-acf.php              → ACF field/group translation compatibility (DB, local JSON, PHP-registered groups) + ACFML-like options post_id routing (`options_{lang}`)
@@ -34,12 +34,12 @@ includes/
   class-wp-loc-duplicate-post.php   → Yoast Duplicate Post integration: clones the whole translation group and links copies as a new group
 assets/
   flags/                           → SVG country flags
-  scss/admin.scss                  → SCSS source (compiled by Prepros)
+  scss/admin.scss                  → SCSS source (auto-compiled by Mini Prepros)
   scss/_db-optimization-wizard.scss → Wizard SCSS partial imported by admin.scss
   css/admin.min.css                → Compiled/minified CSS
   js/admin.js                      → Admin JS source
-  js/db-optimization-wizard.js      → Wizard JS source prepended into admin.js by Prepros
-  js/admin.min.js                  → Minified JS (compiled by Prepros)
+  js/db-optimization-wizard.js      → Wizard JS source prepended into admin.js by Mini Prepros
+  js/admin.min.js                  → Minified JS (auto-compiled by Mini Prepros)
 languages/                         → .po/.mo translation files (uk, ru_RU)
 ```
 
@@ -72,7 +72,7 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **Translatable taxonomies**: Enabled from `Multilingual > Settings` and filtered via `wp_loc_translatable_taxonomies`.
 - **Term slugs**: The same term slug is allowed in different languages. Uniqueness is enforced per language, not globally.
 - **Hierarchical taxonomies**: Parent term relationships are translated and synced across sibling translations. When creating/editing a translated child term, the parent must be mapped to the translated parent in the same language.
-- **Post term sync**: For translatable taxonomies assigned to translatable posts, term relationships sync across the whole post translation group in both directions. Saving any translation becomes the source of truth; sibling posts receive the mapped term translations in their own language.
+- **Post term sync**: For translatable taxonomies assigned to translatable posts, term relationships sync across the whole post translation group in both directions. Saving any translation becomes the source of truth; sibling posts receive the mapped term translations in their own language. Synchronization also runs after `set_object_terms` so REST/Gutenberg term updates made after `save_post` are included. Registered terms from another language are removed from the source post, and a missing target translation must never fall back to attaching the source-language term.
 - **Term deletion**: Deleting any translated term cascades to its whole translation group. Default category protection must apply to the full translation group, including row actions, bulk delete, and edit screen delete links.
 - **Frontend term URLs**: Taxonomy archives must resolve by translated term slug/path, including nested hierarchical term paths with duplicate slugs across languages. Wrong-language term URLs should 404, and the frontend language switcher must return translated term archive URLs.
 - **Frontend hreflang**: `WP_LOC_Frontend::output_hreflang_tags()` should use the native switcher URL resolution for translated singular, front page, posts page, and term archive contexts. `hreflang` values should come from locales (`en-US`, `ru-RU`, `uk`), include `x-default` for the default language URL, and skip untranslated targets. If Yoast is active, WP-LOC should not print a duplicate canonical tag.
@@ -89,12 +89,12 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **ACF nav_menu fields**: `nav_menu` ACF fields are mapped through menu translations so option values and formatted field output resolve to the menu in the current language context.
 - **ACF picker queries**: ACF `post_object`, `page_link`, `relationship`, `taxonomy`, and `nav_menu` picker choices must be scoped to the current editor language. Query hooks should pass `lang` / `suppress_filters=false` so picker results do not mix content from all languages.
 - **Duplicate Post integration**: When Yoast Duplicate Post is active, cloning a translatable post must clone its whole translation group. `WP_LOC_Duplicate_Post` hooks `duplicate_post_after_duplicated` (priority 100, after Duplicate Post copies meta/children/attachments/comments/taxonomies), registers the copy as the source of a new `trid`, and duplicates each sibling translation through `duplicate_post_create_duplicate()` so copied data follows the user's Duplicate Post settings, then links each sibling copy into the new group with `source_language_code` pointing at the copied source. During a copy operation it suspends WP-LOC's default new-post registration via `WP_LOC_Content::$suspend_new_post_registration` (toggled on `duplicate_post_pre_copy` / `duplicate_post_post_copy` with a depth counter) so copies are not double-registered or given empty auto-draft translations. The **Rewrite & Republish** flow must stay untouched: it uses Duplicate Post's OOP duplicator, never fires `duplicate_post_after_duplicated`, and merges back into the original, which keeps its existing links. The class only registers Duplicate Post's own hooks, so it is a no-op when the plugin is absent.
-- **AI settings**: `Multilingual > Settings > AI` stores provider selection, provider API keys, and an opt-in flag for AI-assisted custom nav menu link translation during menu sync.
-- **AI translation tool**: `Multilingual > Tools > AI Translation` uses TinyMCE + AJAX to translate formatted HTML content and insert the translated result back into the editor without reloading the page.
+- **AI settings**: `Multilingual > Settings > AI` detects providers configured through the WordPress 7 Connectors API, stores the selected provider and per-provider text-generation model, and never stores provider API keys. The opt-in flag for AI-assisted custom nav menu link translation remains on the Content Translation tab.
+- **AI runtime**: AI-assisted title, term-name, and custom nav menu link translations use the WordPress 7 AI Client (`wp_ai_client_prompt()`) with the provider/model selected from the configured connector registry. On older WordPress versions, non-AI plugin features continue working and AI calls fail gracefully.
 - **AI-assisted menu sync**: When enabled in settings, `WP Menus Sync` attempts to translate custom nav menu links (`custom` items) with AI while preserving URL/target/classes/XFN and tracking source hashes so preview can detect whether custom-link translations are up to date.
 - **Config migration tool**: `Multilingual > Tools > Config Migration` scans the active theme / parent theme / active plugins for `wpml-config.xml`, reads only `custom-types` and `taxonomies`, can generate a lightweight `wp-loc-config.xml`, and can remove theme-level `wpml-config.xml` after migration.
-- **Assets**: SCSS compiled via Prepros (external tool, no npm). All CSS/JS extracted from PHP into `assets/` — no inline styles or scripts.
-- **AJAX operations**: Language sort order auto-saves on drag. Single translation creation via `+` button in metabox (no page reload). `WP Menus Sync` preview/apply and `AI Translation` both run via AJAX.
+- **Assets**: SCSS and JavaScript are auto-compiled by the Mini Prepros PhpStorm watcher using the existing `prepros.config`. All CSS/JS is extracted from PHP into `assets/` — no inline styles or scripts.
+- **AJAX operations**: Language sort order auto-saves on drag. Single translation creation via `+` button in metabox (no page reload). `WP Menus Sync` preview/apply runs via AJAX.
 
 ### Important functions
 - `wp_loc_get_current_lang()` — current language slug (frontend)
@@ -141,14 +141,13 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_save_order` — save language sort order after drag-and-drop
 - `wp_loc_menu_sync_preview` — refresh `WP Menus Sync` preview grid
 - `wp_loc_menu_sync_apply` — apply selected `WP Menus Sync` operations
-- `wp_loc_ai_translate` — translate HTML content in the `Tools > AI Translation` tab
 - `wp_loc_db_optimization_dismiss` — mark the Database Optimization Wizard as dismissed
 - `wp_loc_db_optimization_scan` — scan existing multilingual data and return wizard summary/mapping data
 - `wp_loc_db_optimization_apply` — apply validated language mapping, adopt compatible data, and clean obsolete service data
 
 ## Development notes
 - PHP 8.1+ required (uses `str_starts_with`, arrow functions, named arguments)
-- No npm, no webpack — Prepros handles SCSS→CSS and JS minification
+- No project npm or webpack workflow — the Mini Prepros PhpStorm plugin watches the project and uses `prepros.config` for SCSS→CSS, JavaScript prepend/concatenation, and minification
 - SCSS source: `assets/scss/admin.scss` plus partials such as `assets/scss/_db-optimization-wizard.scss` → output: `assets/css/admin.min.css`
 - JS source: `assets/js/admin.js`, with `//@prepros-prepend db-optimization-wizard.js`, → output: `assets/js/admin.min.js`
 - Translations: `languages/wp-loc-uk.po` (Ukrainian), `languages/wp-loc-ru_RU.po` (Russian). Compile with `msgfmt`.
@@ -158,8 +157,9 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - Admin classes only instantiate on `is_admin()`
 - `WP_LOC_Duplicate_Post` instantiates on `is_admin()` and is inert without Yoast Duplicate Post (it only registers Duplicate Post's own hooks)
 - Settings are tabbed. Saving one settings tab must never wipe values from the other tabs.
-- Do not edit `assets/css/admin.min.css` or `assets/js/admin.min.js` manually. Prepros compiles them from `assets/scss/admin.scss` and `assets/js/admin.js`.
-- If you change `assets/scss/admin.scss`, an imported partial, `assets/js/admin.js`, or a prepended JS source such as `assets/js/db-optimization-wizard.js`, Prepros must rebuild `assets/css/admin.min.css` / `assets/js/admin.min.js` for the admin UI to reflect the change.
+- Do not edit `assets/css/admin.min.css` or `assets/js/admin.min.js` manually. Mini Prepros compiles them from `assets/scss/admin.scss` and `assets/js/admin.js`.
+- Mini Prepros is expected to be running automatically for this project in PhpStorm. Do not launch the desktop Prepros application for routine builds.
+- After changing `assets/scss/admin.scss`, an imported partial, `assets/js/admin.js`, or a prepended JS source such as `assets/js/db-optimization-wizard.js`, wait for Mini Prepros and verify that `assets/css/admin.min.css` / `assets/js/admin.min.js` changed. If they do not update, report that the watcher is not running instead of editing compiled files manually.
 - Rewrite rules auto-flush via `wp_loc_flush_rewrite_rules` option flag (checked on `init`)
 - Deactivation: flushes rewrite rules to remove language prefixes
 - Uninstall (`uninstall.php`): removes all `wp_loc_*` options, localized options, ACF language-aware options values, `_wp_loc_is_new` post meta, drops `icl_translations` table

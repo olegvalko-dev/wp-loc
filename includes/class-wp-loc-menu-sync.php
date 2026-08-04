@@ -6,7 +6,6 @@ class WP_LOC_Menu_Sync {
 
     private const PAGE_SLUG = 'wp-loc-tools';
     private const TAB_MENU_SYNC = 'menu-sync';
-    private const TAB_AI_TRANSLATE = 'ai-translate';
     private const TAB_CONFIG_MIGRATION = 'config-migration';
     private const CONFIG_ACTION_WRITE_CURRENT = 'write-current-config';
     private const CONFIG_ACTION_WRITE_FROM_WPML = 'write-from-wpml-config';
@@ -17,7 +16,6 @@ class WP_LOC_Menu_Sync {
         add_action( 'admin_init', [ $this, 'handle_config_actions' ] );
         add_action( 'wp_ajax_wp_loc_menu_sync_preview', [ $this, 'ajax_preview' ] );
         add_action( 'wp_ajax_wp_loc_menu_sync_apply', [ $this, 'ajax_apply' ] );
-        add_action( 'wp_ajax_wp_loc_ai_translate', [ $this, 'ajax_ai_translate' ] );
     }
 
     public function add_menu(): void {
@@ -34,7 +32,7 @@ class WP_LOC_Menu_Sync {
     private function get_current_tab(): string {
         $tab = isset( $_GET['tab'] ) ? sanitize_key( (string) $_GET['tab'] ) : self::TAB_MENU_SYNC;
 
-        return in_array( $tab, [ self::TAB_MENU_SYNC, self::TAB_AI_TRANSLATE, self::TAB_CONFIG_MIGRATION ], true ) ? $tab : self::TAB_MENU_SYNC;
+        return in_array( $tab, [ self::TAB_MENU_SYNC, self::TAB_CONFIG_MIGRATION ], true ) ? $tab : self::TAB_MENU_SYNC;
     }
 
     private function get_tab_url( string $tab ): string {
@@ -50,7 +48,6 @@ class WP_LOC_Menu_Sync {
     private function render_tabs( string $current_tab ): void {
         $tabs = [
             self::TAB_MENU_SYNC => __( 'WP Menus Sync', 'wp-loc' ),
-            self::TAB_AI_TRANSLATE => __( 'AI Translation', 'wp-loc' ),
             self::TAB_CONFIG_MIGRATION => __( 'Config Migration', 'wp-loc' ),
         ];
 
@@ -144,33 +141,6 @@ class WP_LOC_Menu_Sync {
                 $summary['skipped']
             ),
             'html' => $this->get_sync_content_html(),
-        ] );
-    }
-
-    public function ajax_ai_translate(): void {
-        $this->assert_ajax_permissions();
-
-        $content = isset( $_POST['content'] ) ? wp_unslash( (string) $_POST['content'] ) : '';
-        $target_lang = isset( $_POST['target_lang'] ) ? sanitize_key( (string) $_POST['target_lang'] ) : '';
-        $active_languages = WP_LOC_Languages::get_active_languages();
-
-        if ( $content === '' ) {
-            wp_send_json_error( [ 'message' => __( 'Enter text to translate first.', 'wp-loc' ) ], 400 );
-        }
-
-        if ( ! $target_lang || ! isset( $active_languages[ $target_lang ] ) ) {
-            wp_send_json_error( [ 'message' => __( 'Select a target language.', 'wp-loc' ) ], 400 );
-        }
-
-        $translated = WP_LOC_AI::translate_content( $content, WP_LOC_AI::get_target_language_name( $target_lang ) );
-
-        if ( $translated === '' ) {
-            wp_send_json_error( [ 'message' => __( 'Translation failed.', 'wp-loc' ) ], 500 );
-        }
-
-        wp_send_json_success( [
-            'content' => $translated,
-            'message' => __( 'Translation inserted into the editor.', 'wp-loc' ),
         ] );
     }
 
@@ -332,45 +302,6 @@ class WP_LOC_Menu_Sync {
                 <button type="button" class="button-link wp-loc-menu-sync-select-all"><?php esc_html_e( 'Select all', 'wp-loc' ); ?></button>
                 <button type="button" class="button-link wp-loc-menu-sync-deselect-all"><?php esc_html_e( 'Deselect all', 'wp-loc' ); ?></button>
             </div>
-        </div>
-        <?php
-
-        return (string) ob_get_clean();
-    }
-
-    private function get_ai_translate_html(): string {
-        $active_languages = WP_LOC_Languages::get_active_languages();
-
-        ob_start();
-        ?>
-        <div class="wp-loc-ai-translate-tool">
-            <div class="wp-loc-ai-translate-editor">
-                <?php
-                wp_editor(
-                    '',
-                    'wp_loc_ai_translate_editor',
-                    [
-                        'textarea_name' => 'wp_loc_ai_translate_editor',
-                        'textarea_rows' => 16,
-                        'media_buttons' => false,
-                        'teeny' => false,
-                    ]
-                );
-                ?>
-            </div>
-
-            <div class="wp-loc-ai-translate-actions">
-                <label for="wp-loc-ai-target-lang" class="screen-reader-text"><?php esc_html_e( 'Translate to', 'wp-loc' ); ?></label>
-                <select id="wp-loc-ai-target-lang" class="wp-loc-ai-target-lang">
-                    <option value=""><?php esc_html_e( 'Select language', 'wp-loc' ); ?></option>
-                    <?php foreach ( $active_languages as $lang => $data ) : ?>
-                        <option value="<?php echo esc_attr( $lang ); ?>"><?php echo esc_html( WP_LOC_Languages::get_display_name( $lang ) ); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button type="button" class="button button-primary wp-loc-ai-translate-submit" disabled="disabled"><?php esc_html_e( 'Translate', 'wp-loc' ); ?></button>
-            </div>
-
-            <div class="wp-loc-menu-sync-feedback wp-loc-ai-translate-feedback" aria-live="polite"></div>
         </div>
         <?php
 
@@ -998,11 +929,6 @@ class WP_LOC_Menu_Sync {
             </p>
             <div class="wp-loc-menu-sync-feedback" aria-live="polite"></div>
             <div class="wp-loc-menu-sync-content"><?php echo $this->get_sync_content_html(); ?></div>
-            <?php elseif ( $current_tab === self::TAB_AI_TRANSLATE ) : ?>
-            <p class="description">
-                <?php esc_html_e( 'Paste or write formatted content in the editor, then translate it into the selected language and insert the translated version back into the editor.', 'wp-loc' ); ?>
-            </p>
-            <div class="wp-loc-menu-sync-content"><?php echo $this->get_ai_translate_html(); ?></div>
             <?php elseif ( $current_tab === self::TAB_CONFIG_MIGRATION ) : ?>
             <p class="description">
                 <?php esc_html_e( 'Detect legacy multilingual config files, extract only the post types and taxonomies relevant for wp-loc, and generate a lightweight wp-loc-config.xml file.', 'wp-loc' ); ?>

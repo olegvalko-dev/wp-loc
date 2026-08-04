@@ -4,16 +4,16 @@
 Plugin Name: WP-LOC
 Plugin URI: https://wp-loc.com/
 Description: Lightweight multilanguage plugin for WordPress
-Version: 1.4.1
+Version: 1.4.7
 Author: Vitalii Kaplia
-Author URI: https://vitaliikaplia.com/
+Author URI: https://kaplia.pro/
 License: GPLv2 or later
 Text Domain: wp-loc
 */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WP_LOC_VERSION', '1.4.1' );
+define( 'WP_LOC_VERSION', '1.4.7' );
 define( 'WP_LOC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WP_LOC_URL', plugin_dir_url( __FILE__ ) );
 define( 'WP_LOC_BASENAME', plugin_basename( __FILE__ ) );
