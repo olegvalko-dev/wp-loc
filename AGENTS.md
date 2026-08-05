@@ -1,7 +1,7 @@
 # WP-LOC — Lightweight Multilingual Plugin
 
 ## What is this?
-A WordPress multilingual plugin.
+A lightweight, WPML/ICL-compatible WordPress multilingual plugin: it reuses the WPML `{prefix}icl_translations` table and ships an `icl_*`/`wpml_*` compatibility layer, so it can replace WPML and migrate existing multilingual data with near-zero effort.
 
 ## Architecture
 
@@ -135,7 +135,7 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - Functions: `icl_object_id()`, `icl_get_languages()`, `icl_get_default_language()`, `wpml_get_default_language()`, `wpml_get_current_language()`, `wpml_add_translatable_content()`, `wpml_object_id_filter()`
 - Filters: `wpml_post_language_details`, `wpml_object_id`, `wpml_current_language`, `wpml_default_language`, `wpml_home_url`, `wpml_active_languages`, `wpml_is_translated_taxonomy`, `wpml_element_trid`, `wpml_get_element_translations`, `wpml_element_language_code`, `wpml_element_language_details`
 - Actions: `wpml_switch_language`, `wpml_set_element_language_details`; `WP_LOC_Options` separately consumes compatible `wpml_multilingual_options` registrations
-- Constants: `ICL_LANGUAGE_CODE`, `ICL_LANGUAGE_NAME`
+- Constants: `ICL_LANGUAGE_CODE`, `ICL_LANGUAGE_NAME`, plus WPML asset-suppression constants `ICL_DONT_LOAD_NAVIGATION_CSS`, `ICL_DONT_LOAD_LANGUAGE_SELECTOR_CSS`, `ICL_DONT_LOAD_LANGUAGES_JS`
 - Global `$sitepress` mock object
 - Keeps the compatible `icl_sitepress_settings` default/active-language values synchronized with WP-LOC
 - `nav_menu` handling compatible with WPML-style lookups (`icl_object_id`, `wpml_object_id`, `wpml_element_language_code`)

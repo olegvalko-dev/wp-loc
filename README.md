@@ -255,6 +255,7 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - Hierarchical page paths are resolved in the requested language before WordPress fallback resolution, so translated parent/child pages can safely reuse the same slugs across languages
 - Custom post type translations with identical slugs across languages resolve to their translated post instead of redirecting back to the default-language post
 - Canonical redirects are blocked when WordPress tries to strip or replace an existing non-default language URL prefix
+- The language prefix is applied to `page_link`, `post_link`, and `post_type_link` at priority `9999`, after themes and plugins finish building custom (taxonomy-driven) permalink paths, so translated custom post type URLs keep their target-language path instead of losing the prefix
 - Compatibility switcher APIs such as `icl_get_languages()` use the same translated URLs as WP-LOC's native switcher helpers
 - Frontend requests persist `wp_loc_current_language`, `wp_loc_current_locale`, `_icl_current_language`, and `wp-wpml_current_language` cookies so same-origin AJAX calls to `admin-ajax.php` keep the expected language context
 
