@@ -7,7 +7,7 @@ Lightweight multilingual plugin for WordPress.
 - **Language management** — Multilingual > Languages page with drag-and-drop ordering (auto-saves via AJAX)
 - **Automatic language detection** — install a language in WP General Settings, it auto-appears in WP-LOC. Delete from WP-LOC — removes language files too.
 - **Post/page translations** — auto-create translation drafts, translation metabox in editor with per-language `+` button for on-demand creation
-- **Bidirectional post taxonomy sync** — when a translated post changes its multilingual categories/tags/custom taxonomies, sibling posts receive the mapped term translations in their own language and stale foreign-language relationships are removed
+- **Bidirectional post taxonomy sync** — when a translated post changes its multilingual categories/tags/custom taxonomies, sibling posts receive the mapped term translations in their own language and stale foreign-language relationships are removed; REST/Gutenberg `set_object_terms` updates are handled after `save_post`
 - **Taxonomy/term translations** — migration-compatible term translation groups for `category`, `post_tag`, and selected custom taxonomies
 - **Term translation UI** — translation column in term lists, translation panel on term edit screens, and per-language `+` buttons for on-demand term translation creation
 - **Automatic term translation creation** — creating a term can auto-create sibling translations in all active languages
@@ -25,7 +25,8 @@ Lightweight multilingual plugin for WordPress.
 - **Language registry** — central locale/code/slug/name/flag normalization for common WordPress and multilingual-plugin language codes, including aliases like `uk` → `ua` and legacy `iw` → `he`
 - **Separate URL slugs and compatibility codes** — languages can use URL slugs like `ua` while compatible database/API language codes remain `uk`
 - **Non-translatable post types** — work correctly with language URL prefixes (shared content across languages)
-- **Translatable post type detection** — if compatible translation rows already exist, WP-LOC can detect translated custom post types and taxonomies and merge them into runtime settings
+- **Translatable post type detection** — if compatible translation rows already exist, WP-LOC detects translated custom post types and taxonomies and merges them into runtime settings even when older saved settings are incomplete
+- **Selectable content types** — public post types/taxonomies and custom non-public registered objects can be enabled from settings, while internal WordPress objects and specially handled objects stay excluded
 - **Frontend/admin query filtering** — translatable posts are filtered by the current language for main, secondary, AJAX, REST, and Gutenberg preview `WP_Query` calls when filters are not suppressed
 - **Frontend AJAX language context** — standard `admin-ajax.php` handlers inherit the current frontend language through compatible cookies, request parameters, and referring URLs
 - **Runtime language switching** — WPML-style `wpml_switch_language` / `$sitepress->switch_lang()` calls temporarily switch WP-LOC's language and WordPress locale, so background handlers and transactional email flows can render content in a user's preferred language

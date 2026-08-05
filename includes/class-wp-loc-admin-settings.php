@@ -207,12 +207,13 @@ TWIG;
      */
     public function filter_post_types( array $post_types ): array {
         $saved = get_option( self::OPTION_KEY );
+        $detected = self::get_detected_translatable_post_types();
 
         if ( $saved !== false && is_array( $saved ) ) {
-            return array_values( array_unique( array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) ) ) );
-        }
+            $saved = array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) );
 
-        $detected = self::get_detected_translatable_post_types();
+            return array_values( array_unique( array_merge( $saved, $detected ) ) );
+        }
 
         return array_values( array_unique( array_merge( $post_types, $detected ) ) );
     }
@@ -230,12 +231,13 @@ TWIG;
      */
     public function filter_taxonomies( array $taxonomies ): array {
         $saved = get_option( self::TAXONOMIES_OPTION_KEY );
+        $detected = self::get_detected_translatable_taxonomies();
 
         if ( $saved !== false && is_array( $saved ) ) {
-            return array_values( array_unique( array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) ) ) );
-        }
+            $saved = array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) );
 
-        $detected = self::get_detected_translatable_taxonomies();
+            return array_values( array_unique( array_merge( $saved, $detected ) ) );
+        }
 
         return array_values( array_unique( array_merge( $taxonomies, $detected ) ) );
     }
@@ -639,13 +641,15 @@ TWIG;
         );
 
         $saved = get_option( self::OPTION_KEY );
+        $detected_post_types = self::get_detected_translatable_post_types();
         $selected = ( $saved !== false && is_array( $saved ) )
-            ? $saved
-            : array_values( array_unique( array_merge( [ 'post', 'page' ], self::get_detected_translatable_post_types() ) ) );
+            ? array_values( array_unique( array_merge( array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved ) ) ), $detected_post_types ) ) )
+            : array_values( array_unique( array_merge( [ 'post', 'page' ], $detected_post_types ) ) );
         $saved_taxonomies = get_option( self::TAXONOMIES_OPTION_KEY );
+        $detected_taxonomies = self::get_detected_translatable_taxonomies();
         $selected_taxonomies = ( $saved_taxonomies !== false && is_array( $saved_taxonomies ) )
-            ? $saved_taxonomies
-            : array_values( array_unique( array_merge( [ 'category', 'post_tag' ], self::get_detected_translatable_taxonomies() ) ) );
+            ? array_values( array_unique( array_merge( array_filter( array_map( 'sanitize_key', array_map( 'strval', $saved_taxonomies ) ) ), $detected_taxonomies ) ) )
+            : array_values( array_unique( array_merge( [ 'category', 'post_tag' ], $detected_taxonomies ) ) );
         $auto_create_posts = self::should_auto_create_post_translations();
         $auto_create_terms = self::should_auto_create_term_translations();
         $auto_create_menus = self::should_auto_create_menu_translations();
