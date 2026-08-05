@@ -16,11 +16,11 @@ includes/
   class-wp-loc-language-registry.php → Language code/locale/slug/name/flag normalization registry used by migration and language helpers
   class-wp-loc-languages.php        → Language config stored in wp_options
   class-wp-loc-routing.php          → Rewrite rules, URL lang prefix, locale switching
-  class-wp-loc-admin.php            → Admin bar switcher, post filtering, translation metabox, AJAX translation creation
+  class-wp-loc-admin.php            → Admin bar switcher, post/link filtering, translation metabox, AJAX translation and AI title controls
   class-wp-loc-admin-languages.php  → Multilingual > Languages page (WP_List_Table, AJAX sort, language file cleanup)
-  class-wp-loc-admin-settings.php   → Multilingual > Settings page (tabs for content, switcher, AI settings)
+  class-wp-loc-admin-settings.php   → Multilingual > Settings page (content, switcher, integrations, and AI tabs)
   class-wp-loc-ai.php               → WordPress AI Client / Connectors adapter and HTML-safe translation helpers
-  class-wp-loc-content.php          → Auto-create translation drafts for new posts, sync shared post props and multilingual taxonomy assignments
+  class-wp-loc-content.php          → Auto-create translation drafts, sync shared props/taxonomies, cascade permanent post deletion
   class-wp-loc-frontend.php         → Lang switcher, hreflang, canonical, html lang attr, non-translatable post type support
   class-wp-loc-menus.php            → WPML-like multilingual nav menus, menu translation groups, menu item cloning, menu assignment mapping
   class-wp-loc-menu-sync.php        → Multilingual > Tools page (tabs for WP Menus Sync and Config Migration)
@@ -28,8 +28,8 @@ includes/
   class-wp-loc-compat.php           → Third-party compatibility layer (icl_object_id, $sitepress, wpml_* filters/actions, nav_menu/object language helpers)
   class-wp-loc-acf.php              → ACF field/group translation compatibility (DB, local JSON, PHP-registered groups) + ACFML-like options post_id routing (`options_{lang}`)
   class-wp-loc-yoast.php            → Yoast SEO compatibility layer (localized global options, primary terms, term SEO meta, sitemap alternates, indexable invalidation)
-  class-wp-loc-media.php            → Media attachment language assignment
-  class-wp-loc-terms.php            → Taxonomy/term translations, term admin UI, term routing, duplicate slugs per language
+  class-wp-loc-media.php            → Linked attachment translations, media filtering, featured-image mapping, deletion/file safety
+  class-wp-loc-terms.php            → Taxonomy/term translations, term admin/AI UI, term routing, duplicate slugs per language
   class-wp-loc-timber.php           → Timber/Twig integration for switcher helpers
   class-wp-loc-github-updater.php   → GitHub branch-based updater using the remote plugin header Version value
   class-wp-loc-duplicate-post.php   → Yoast Duplicate Post integration: clones the whole translation group and links copies as a new group
@@ -41,8 +41,14 @@ assets/
   js/admin.js                      → Admin JS source
   js/db-optimization-wizard.js      → Wizard JS source prepended into admin.js by Mini Prepros
   js/admin.min.js                  → Minified JS (auto-compiled by Mini Prepros)
-languages/                         → .po/.mo translation files (uk, ru_RU)
+languages/                         → POT template and PO/MO translation files (uk, ru_RU)
 ```
+
+### Admin screens and menu order
+- `admin.php?page=wp-loc` — **Languages**, the top-level **Multilingual** page and first submenu (top-level menu position `80`)
+- `admin.php?page=wp-loc-tools` — **Tools**, second submenu; tabs are `menu-sync` and `config-migration`
+- `admin.php?page=wp-loc-settings` — **Settings**, third submenu; tabs are `content`, `switcher`, `integrations`, and `ai`
+- All three screens require the `manage_options` capability. Their submenu order is enforced by `admin_menu` priorities `10`, `15`, and `20` respectively.
 
 ### Key design decisions
 - **DB**: Uses `{prefix}icl_translations` table with **strict WPML-compatible schema** — same table name, same columns (translation_id, element_type, element_id, trid, language_code, source_language_code), same indexes, same element_type format (`post_page`, `post_post`, `post_{cpt}`, `tax_{taxonomy}`). This ensures zero-effort bidirectional migration with WPML. **Any changes to the DB schema MUST preserve this compatibility.**
@@ -69,7 +75,12 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **Runtime language switching**: `do_action( 'wpml_switch_language', $lang )` and `$sitepress->switch_lang( $lang )` must temporarily switch WP-LOC's current language and WordPress locale. This is required for background/admin flows such as payment webhooks, cron notifications, and transactional emails that render content in a user's preferred frontend language. Code that switches language is expected to switch back to the previous/default language after rendering.
 - **Localized options compatibility**: Options registered through either `wp_loc_multilingual_options` or compatible `wpml_multilingual_options` must be read per language on the frontend, frontend AJAX, and explicit runtime language-switch contexts. Admin option filtering must support standard settings pages and custom Settings submenu pages. Option lookup must try compatible language-code suffixes and internal URL-slug suffixes, so `ua` URL setups can still read legacy-compatible `*_uk` option rows.
 - **Runtime translatable detection**: Settings merge configured post types/taxonomies with element types detected from `icl_translations`, even when saved settings already exist. This keeps migrated custom post types/taxonomies language-filtered after partial/older settings saves, and keeps the Settings UI checked for detected types such as `feedback`.
+- **Detected translation visibility**: The Content Translation settings show the number of existing `icl_translations` records next to each detected post type. These counts explain why runtime detection keeps an unchecked/previously configured post type multilingual. Taxonomies are detected and merged too, but currently do not display counts.
 - **Selectable content types**: Multilingual settings list public post types/taxonomies and all registered custom non-public post types/taxonomies, including custom objects without an admin UI. Internal non-public WordPress objects and specially handled objects such as attachments, revisions, nav menu items, `nav_menu`, and `post_format` remain excluded.
+- **Native link picker**: `WP_LOC_Admin::filter_link_query_by_language()` scopes WordPress's `wp_link_query()` results to the current editor language for translatable post types. This also covers ACF link fields that invoke WordPress's native Insert/edit Link modal.
+- **AI title controls**: Post list row actions, Gutenberg title buttons, and Classic Editor title buttons must render for every post type accepted by `WP_LOC_Admin_Settings::is_translatable()`. Do not special-case only `post`/`page` or restrict title translation UI by editor mode beyond choosing the Gutenberg vs classic control.
+- **Post lifecycle**: Shared post attributes include `post_status`, so Trash state follows the group when attribute synchronization is enabled. `WP_LOC_Content::handle_delete_post()` always cascades a permanent deletion across every sibling of a translatable post and removes all associated `icl_translations` rows; non-translatable types only have the deleted element row cleaned.
+- **Multilingual media**: New uploads are registered in the current language and cloned as linked attachment posts for other active languages while sharing `_wp_attached_file` and generated metadata. Admin media list/grid/modal queries are language-filtered, frontend image lookup resolves the current-language attachment, featured-image sync maps translated attachment IDs, and cascade deletion must delete the physical file at most once.
 - **Translatable taxonomies**: Enabled from `Multilingual > Settings` and filtered via `wp_loc_translatable_taxonomies`.
 - **Term slugs**: The same term slug is allowed in different languages. Uniqueness is enforced per language, not globally.
 - **Hierarchical taxonomies**: Parent term relationships are translated and synced across sibling translations. When creating/editing a translated child term, the parent must be mapped to the translated parent in the same language.
@@ -78,9 +89,10 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - **Frontend term URLs**: Taxonomy archives must resolve by translated term slug/path, including nested hierarchical term paths with duplicate slugs across languages. Wrong-language term URLs should 404, and the frontend language switcher must return translated term archive URLs.
 - **Frontend hreflang**: `WP_LOC_Frontend::output_hreflang_tags()` should use the native switcher URL resolution for translated singular, front page, posts page, and term archive contexts. `hreflang` values should come from locales (`en-US`, `ru-RU`, `uk`), include `x-default` for the default language URL, and skip untranslated targets. If Yoast is active, WP-LOC should not print a duplicate canonical tag.
 - **Canonical redirects**: WordPress canonical redirects must never strip or replace a valid non-default language URL prefix. WP-LOC should allow canonical cleanup only when the redirect keeps the requested language prefix intact.
-- **Singular routing**: Translated singular URLs must resolve by language, post type, and slug. For hierarchical pages and hierarchical post types, resolve the full path in the requested language before falling back to WordPress `get_page_by_path()`, because migrated projects may reuse identical parent/child slugs across languages. For pages use `page_id`; for posts/CPTs use `p`, `post_type`, and `name`. Do not collapse CPT matches into `page_id`, because migrated projects may have identical slugs across languages and post types.
+- **Singular routing**: Translated singular URLs must resolve by language, post type, and slug. Frontend by-slug resolution must only consider post types accepted by `is_post_type_viewable()` so a non-public object cannot leak through a matching public slug. For hierarchical pages and hierarchical post types, resolve the full path in the requested language before falling back to WordPress `get_page_by_path()`, because migrated projects may reuse identical parent/child slugs across languages. For pages use `page_id`; for posts/CPTs use `p`, `post_type`, and `name`. Do not collapse CPT matches into `page_id`, because migrated projects may have identical slugs across languages and post types.
 - **Compatibility switcher URLs**: `icl_get_languages()` / `wpml_active_languages` should reuse native WP-LOC translated URLs for the current object/archive where possible, including author archives, search results, date archives, core post type archives, pagination, and query arguments, falling back to language home URLs only when no translation exists or settings request fallback behavior.
 - **Posts page / front page routing**: Localized `page_on_front` and `page_for_posts` must resolve correctly per language without canonical redirects back to the default language. Theme integrations that previously depended on `ICL_LANGUAGE_CODE` may need a `wp_loc_get_current_lang()` fallback during bootstrap.
+- **Posts page editor parity**: On post editor screens, `WP_LOC_Options::filter_admin_options()` must expose the localized `page_on_front` / `page_for_posts` IDs. This lets WordPress itself recognize translated posts pages in Classic Editor and Gutenberg, show the native latest-posts notice, and apply the standard posts-page editor restrictions.
 - **ACF options architecture**: ACF options pages are routed through language-aware post IDs like `options_en` / `options_ru`, close to ACFML behavior. `shared` fields stay on the base options post ID and must be ignored when saving translated options pages, `none` fields remain editable shared values on the base options post ID, and `translatable` fields read/write from the translated options post ID. `get_field('options')` and `get_fields('options')` must both work with this model.
 - **ACF user fields**: ACF fields attached to WordPress users use WPML-compatible language-suffixed user meta for `translatable` fields, e.g. `author_archive_name_ru` / `author_archive_name_en`, while the default language stays on the canonical meta key. User profile saves preserve the selected admin language so translated user fields do not overwrite default-language values.
 - **ACF shared field saves**: Read-only `shared` fields on translated posts, terms, and options pages must be ignored during save. Only the source-language entity may push shared values to its translations; translated entities must never push empty disabled ACF payloads back into the translation group.
@@ -107,7 +119,9 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 - `WP_LOC::instance()->ai` — AI helper / provider wrapper entry point
 - `WP_LOC_Languages::locale_to_slug()` — convert WP locale to URL slug (filterable)
 - `WP_LOC_Languages::get_display_name()` — get display name for language switchers
+- `WP_LOC_Admin_Settings::is_translatable()` / `is_translatable_taxonomy()` — runtime multilingual type checks that include saved and detected configuration
 - `WP_LOC_Terms::get_term_translation()` — get translated `term_id` for a target language
+- `WP_LOC_Terms::get_term_language()` — get the internal language slug assigned to a term
 - `WP_LOC_Terms::get_term_url_for_language()` — build frontend URL for a term translation in a specific language
 - `WP_LOC_AI::translate_content()` — translate formatted content while preserving HTML
 - `WP_LOC_AI::get_target_language_name()` — normalize a WP-LOC language slug/locale into a stable AI target language label
@@ -118,11 +132,12 @@ languages/                         → .po/.mo translation files (uk, ru_RU)
 
 ### Compat layer (class-wp-loc-compat.php)
 Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` not defined). Provides:
-- `icl_object_id()`, `icl_get_languages()`, `wpml_object_id_filter()`
-- Filters: `wpml_object_id`, `wpml_current_language`, `wpml_default_language`, `wpml_active_languages`
-- Actions: `wpml_switch_language`, `wpml_set_element_language_details`, `wpml_multilingual_options`
+- Functions: `icl_object_id()`, `icl_get_languages()`, `icl_get_default_language()`, `wpml_get_default_language()`, `wpml_get_current_language()`, `wpml_add_translatable_content()`, `wpml_object_id_filter()`
+- Filters: `wpml_post_language_details`, `wpml_object_id`, `wpml_current_language`, `wpml_default_language`, `wpml_home_url`, `wpml_active_languages`, `wpml_is_translated_taxonomy`, `wpml_element_trid`, `wpml_get_element_translations`, `wpml_element_language_code`, `wpml_element_language_details`
+- Actions: `wpml_switch_language`, `wpml_set_element_language_details`; `WP_LOC_Options` separately consumes compatible `wpml_multilingual_options` registrations
 - Constants: `ICL_LANGUAGE_CODE`, `ICL_LANGUAGE_NAME`
 - Global `$sitepress` mock object
+- Keeps the compatible `icl_sitepress_settings` default/active-language values synchronized with WP-LOC
 - `nav_menu` handling compatible with WPML-style lookups (`icl_object_id`, `wpml_object_id`, `wpml_element_language_code`)
 - WPML-like public language APIs return compatible language codes such as `uk`; native WP-LOC URL helpers continue using configured slugs such as `ua`
 
@@ -130,14 +145,18 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_translatable_post_types` — array of post types (default: `['post', 'page']`)
 - `wp_loc_translatable_taxonomies` — array of taxonomy slugs with multilingual behavior
 - `wp_loc_locale_slug_map` — override locale → slug mapping
+- `wp_loc_language_registry` — filter the central external language code/locale/name/flag registry
 - `wp_loc_default_multilingual_options` — option names to localize
 - `wp_loc_multilingual_options` — action to register an option as multilingual
 - `wp_loc_duplicate_translation_group` — enable/disable cloning the translation group during Yoast Duplicate Post copies (default: `true`)
 
 ### AJAX endpoints
 - `wp_loc_create_translation` — create a single translation for a post+language (used by metabox `+` button)
+- `wp_loc_refresh_metabox` — refresh the post translation metabox after an AJAX operation
+- `wp_loc_translate_post_title` — AI-translate a post title (and optionally its slug) into a target language
 - `wp_loc_create_term_translation` — create a single translation for a term+language
 - `wp_loc_refresh_term_translations` — refresh term translation controls after AJAX creation
+- `wp_loc_translate_term_name` — AI-translate a term name (and optionally its slug) into a target language
 - `wp_loc_save_order` — save language sort order after drag-and-drop
 - `wp_loc_menu_sync_preview` — refresh `WP Menus Sync` preview grid
 - `wp_loc_menu_sync_apply` — apply selected `WP Menus Sync` operations
@@ -145,21 +164,25 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_db_optimization_scan` — scan existing multilingual data and return wizard summary/mapping data
 - `wp_loc_db_optimization_apply` — apply validated language mapping, adopt compatible data, and clean obsolete service data
 
+### Admin POST endpoints
+- `wp_loc_restart_db_optimization_wizard` — reset the wizard to `pending` and return to the Plugins screen (capability and nonce protected)
+
 ## Development notes
 - PHP 8.1+ required (uses `str_starts_with`, arrow functions, named arguments)
 - No project npm or webpack workflow — the Mini Prepros PhpStorm plugin watches the project and uses `prepros.config` for SCSS→CSS, JavaScript prepend/concatenation, and minification
 - SCSS source: `assets/scss/admin.scss` plus partials such as `assets/scss/_db-optimization-wizard.scss` → output: `assets/css/admin.min.css`
 - JS source: `assets/js/admin.js`, with `//@prepros-prepend db-optimization-wizard.js`, → output: `assets/js/admin.min.js`
-- Translations: `languages/wp-loc-uk.po` (Ukrainian), `languages/wp-loc-ru_RU.po` (Russian). Compile with `msgfmt`.
+- Translations: `languages/wp-loc.pot`, `languages/wp-loc-uk.po` (Ukrainian), and `languages/wp-loc-ru_RU.po` (Russian). Compile `.po` files with `msgfmt`.
 - `.po` headers include the full WordPress Poedit keyword list, including context-aware `_x`/`esc_html_x`/`esc_attr_x`, so Poedit can extract contextual strings correctly.
 - ACF module only loads when ACF plugin is active
 - Timber integration only loads when Timber is present
-- Admin classes only instantiate on `is_admin()`
+- `WP_LOC_Admin_Settings` loads on admin and frontend because its type filters/helpers are runtime dependencies; UI-only classes (`WP_LOC_Admin`, `WP_LOC_Admin_Languages`, `WP_LOC_Menu_Sync`, the wizard, and Duplicate Post integration) instantiate on `is_admin()`
 - `WP_LOC_Duplicate_Post` instantiates on `is_admin()` and is inert without Yoast Duplicate Post (it only registers Duplicate Post's own hooks)
 - Settings are tabbed. Saving one settings tab must never wipe values from the other tabs.
 - Do not edit `assets/css/admin.min.css` or `assets/js/admin.min.js` manually. Mini Prepros compiles them from `assets/scss/admin.scss` and `assets/js/admin.js`.
 - Mini Prepros is expected to be running automatically for this project in PhpStorm. Do not launch the desktop Prepros application for routine builds.
 - After changing `assets/scss/admin.scss`, an imported partial, `assets/js/admin.js`, or a prepended JS source such as `assets/js/db-optimization-wizard.js`, wait for Mini Prepros and verify that `assets/css/admin.min.css` / `assets/js/admin.min.js` changed. If they do not update, report that the watcher is not running instead of editing compiled files manually.
+- Release version bumps must keep the `Version:` header in `wp-loc.php`, `WP_LOC_VERSION`, and `languages/wp-loc.pot`'s `Project-Id-Version` synchronized.
 - Rewrite rules auto-flush via `wp_loc_flush_rewrite_rules` option flag (checked on `init`)
 - Deactivation: flushes rewrite rules to remove language prefixes
 - Uninstall (`uninstall.php`): removes all `wp_loc_*` options, localized options, ACF language-aware options values, `_wp_loc_is_new` post meta, drops `icl_translations` table
