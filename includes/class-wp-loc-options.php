@@ -70,7 +70,12 @@ class WP_LOC_Options {
         add_action( 'wpml_multilingual_options', [ $this, 'register_option' ] );
         add_action( 'wp_loc_multilingual_options', [ $this, 'register_option' ] );
 
-        // Admin: save localized option values
+        // Admin: route non-default-language option updates to localized rows.
+        // pre_update_option runs before update_option compares values, so a
+        // translation equal to the default-language value still saves.
+        add_filter( 'pre_update_option', [ $this, 'route_localized_option_update' ], 10, 3 );
+
+        // Admin: sync page option translations on default-language saves
         add_action( 'updated_option', [ $this, 'save_localized_option' ], 10, 3 );
 
         // Admin: load localized values on settings pages
@@ -150,7 +155,8 @@ class WP_LOC_Options {
 
         [ $has_localized_value, $localized_value ] = self::get_localized_option_value( $option, $current_lang );
 
-        if ( $has_localized_value && self::is_valid_localized_page_option_value( $option, $localized_value ) ) {
+        // An empty translation falls back to the default-language value.
+        if ( $has_localized_value && $localized_value !== '' && self::is_valid_localized_page_option_value( $option, $localized_value ) ) {
             return $localized_value;
         }
 
@@ -189,33 +195,48 @@ class WP_LOC_Options {
     }
 
     /**
-     * Save localized option when admin language differs from default
+     * Route option updates made in a non-default admin language to the
+     * localized option row instead of the default-language row.
+     *
+     * Hooked to pre_update_option because updated_option never fires when the
+     * submitted translation equals the stored default-language value, so the
+     * save has to happen before update_option's value comparison. Returning
+     * $old_value short-circuits the update and leaves the default row untouched.
+     */
+    public function route_localized_option_update( $value, string $option, $old_value ) {
+        $is_page_option = in_array( $option, [ 'page_on_front', 'page_for_posts' ], true );
+        if ( ! is_admin() && ! $is_page_option ) return $value;
+        if ( ! self::is_multilingual( $option ) ) return $value;
+
+        // Prevent recursion
+        static $routing = [];
+        if ( isset( $routing[ $option ] ) ) return $value;
+
+        $admin_lang = wp_loc_get_admin_lang();
+
+        if ( $admin_lang === WP_LOC_Languages::get_default_language() ) {
+            return $value;
+        }
+
+        $routing[ $option ] = true;
+        update_option( $option . '_' . self::get_primary_language_option_suffix( $admin_lang ), $value );
+        unset( $routing[ $option ] );
+
+        return $old_value;
+    }
+
+    /**
+     * Sync page option translations when saving in the default admin language.
+     * Non-default-language saves are routed by route_localized_option_update().
      */
     public function save_localized_option( string $option, $old_value, $value ): void {
         $is_page_option = in_array( $option, [ 'page_on_front', 'page_for_posts' ], true );
         if ( ! is_admin() && ! $is_page_option ) return;
         if ( ! self::is_multilingual( $option ) ) return;
 
-        // Prevent recursion
-        static $saving = [];
-        if ( isset( $saving[ $option ] ) ) return;
-
-        $admin_lang = wp_loc_get_admin_lang();
-        $default_lang = WP_LOC_Languages::get_default_language();
-
-        if ( $admin_lang === $default_lang ) {
+        if ( wp_loc_get_admin_lang() === WP_LOC_Languages::get_default_language() ) {
             $this->sync_localized_page_option_translations( $option, $value );
-            return;
         }
-
-        $localized_key = $option . '_' . self::get_primary_language_option_suffix( $admin_lang );
-
-        $saving[ $option ] = true;
-        update_option( $localized_key, $value );
-
-        // Restore original value for default language
-        update_option( $option, $old_value );
-        unset( $saving[ $option ] );
     }
 
     private function sync_localized_page_option_translations( string $option, $value ): void {

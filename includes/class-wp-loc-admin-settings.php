@@ -21,12 +21,7 @@ class WP_LOC_Admin_Settings {
     const ENABLE_YOAST_COMPAT_OPTION_KEY = 'wp_loc_enable_yoast_compat';
     const ENABLE_YOAST_SITEMAP_ALTERNATES_OPTION_KEY = 'wp_loc_enable_yoast_sitemap_alternates';
     const AI_ENGINE_OPTION_KEY = 'wp_loc_ai_engine';
-    const OPENAI_API_KEY_OPTION_KEY = 'wp_loc_openai_api_key';
-    const OPENAI_MODEL_OPTION_KEY = 'wp_loc_openai_model';
-    const CLAUDE_API_KEY_OPTION_KEY = 'wp_loc_claude_api_key';
-    const CLAUDE_MODEL_OPTION_KEY = 'wp_loc_claude_model';
-    const GEMINI_API_KEY_OPTION_KEY = 'wp_loc_gemini_api_key';
-    const GEMINI_MODEL_OPTION_KEY = 'wp_loc_gemini_model';
+    const AI_MODELS_OPTION_KEY = 'wp_loc_ai_models';
     const AI_TRANSLATE_CUSTOM_MENU_LINKS_OPTION_KEY = 'wp_loc_ai_translate_custom_menu_links';
     const TAB_CONTENT = 'content';
     const TAB_SWITCHER = 'switcher';
@@ -41,8 +36,8 @@ class WP_LOC_Admin_Settings {
 
     public function __construct() {
         add_action( 'admin_menu', [ $this, 'add_menu' ], 20 );
+        add_action( 'admin_init', [ $this, 'migrate_legacy_ai_settings' ], 5 );
         add_action( 'admin_init', [ $this, 'handle_save' ] );
-        add_action( 'wp_ajax_wp_loc_test_ai_key', [ $this, 'ajax_test_ai_key' ] );
         add_filter( 'wp_loc_translatable_post_types', [ $this, 'filter_post_types' ] );
         add_filter( 'wp_loc_translatable_taxonomies', [ $this, 'filter_taxonomies' ] );
     }
@@ -461,76 +456,88 @@ TWIG;
         return (bool) get_option( self::ENABLE_YOAST_SITEMAP_ALTERNATES_OPTION_KEY, true );
     }
 
+    private static function normalize_ai_engine( string $engine ): string {
+        return match ( sanitize_key( $engine ) ) {
+            'claude' => 'anthropic',
+            'gemini' => 'google',
+            default  => sanitize_key( $engine ),
+        };
+    }
+
     public static function get_ai_engine(): string {
-        $engine = (string) get_option( self::AI_ENGINE_OPTION_KEY, 'openai' );
-        $allowed = [ 'openai', 'claude', 'gemini' ];
+        $providers = WP_LOC_AI::get_connected_providers();
 
-        return in_array( $engine, $allowed, true ) ? $engine : 'openai';
+        if ( $providers === [] ) {
+            return '';
+        }
+
+        $engine = self::normalize_ai_engine( (string) get_option( self::AI_ENGINE_OPTION_KEY, '' ) );
+
+        return isset( $providers[ $engine ] ) ? $engine : (string) array_key_first( $providers );
     }
 
-    public static function get_openai_api_key(): string {
-        return (string) get_option( self::OPENAI_API_KEY_OPTION_KEY, '' );
-    }
+    public static function get_ai_model( string $provider_id = '' ): string {
+        $provider_id = $provider_id !== '' ? sanitize_key( $provider_id ) : self::get_ai_engine();
+        $models = WP_LOC_AI::get_provider_models( $provider_id );
 
-    public static function get_openai_model(): string {
-        $models = self::get_openai_models();
-        $model = (string) get_option( self::OPENAI_MODEL_OPTION_KEY, 'gpt-5.4-mini' );
+        if ( $models === [] ) {
+            return '';
+        }
 
-        return array_key_exists( $model, $models ) ? $model : 'gpt-5.4-mini';
-    }
+        $saved_models = get_option( self::AI_MODELS_OPTION_KEY, [] );
+        $saved_models = is_array( $saved_models ) ? $saved_models : [];
+        $model_id = isset( $saved_models[ $provider_id ] ) ? sanitize_text_field( (string) $saved_models[ $provider_id ] ) : '';
 
-    public static function get_claude_api_key(): string {
-        return (string) get_option( self::CLAUDE_API_KEY_OPTION_KEY, '' );
-    }
-
-    public static function get_claude_model(): string {
-        $models = self::get_claude_models();
-        $model = (string) get_option( self::CLAUDE_MODEL_OPTION_KEY, 'claude-sonnet-4-6' );
-
-        return array_key_exists( $model, $models ) ? $model : 'claude-sonnet-4-6';
-    }
-
-    public static function get_gemini_api_key(): string {
-        return (string) get_option( self::GEMINI_API_KEY_OPTION_KEY, '' );
-    }
-
-    public static function get_gemini_model(): string {
-        $models = self::get_gemini_models();
-        $model = (string) get_option( self::GEMINI_MODEL_OPTION_KEY, 'gemini-2.5-flash' );
-
-        return array_key_exists( $model, $models ) ? $model : 'gemini-2.5-flash';
-    }
-
-    public static function get_openai_models(): array {
-        return [
-            'gpt-4o-mini' => __( 'GPT-4o mini', 'wp-loc' ),
-            'gpt-4o'      => __( 'GPT-4o', 'wp-loc' ),
-            'gpt-5.4-nano' => __( 'GPT-5.4 Nano, fastest and cheapest', 'wp-loc' ),
-            'gpt-5.4-mini' => __( 'GPT-5.4 Mini, balanced default', 'wp-loc' ),
-            'gpt-5.4'      => __( 'GPT-5.4, highest quality', 'wp-loc' ),
-        ];
-    }
-
-    public static function get_claude_models(): array {
-        return [
-            'claude-haiku-4-5'   => __( 'Claude Haiku 4.5, fastest and cheapest', 'wp-loc' ),
-            'claude-sonnet-4-5'  => __( 'Claude Sonnet 4.5, balanced', 'wp-loc' ),
-            'claude-sonnet-4-6'  => __( 'Claude Sonnet 4.6, stronger quality', 'wp-loc' ),
-            'claude-opus-4-6'    => __( 'Claude Opus 4.6, highest quality', 'wp-loc' ),
-        ];
-    }
-
-    public static function get_gemini_models(): array {
-        return [
-            'gemini-2.5-flash-lite' => __( 'Gemini 2.5 Flash-Lite, fastest and cheapest', 'wp-loc' ),
-            'gemini-2.5-flash'      => __( 'Gemini 2.5 Flash, balanced default', 'wp-loc' ),
-            'gemini-3-flash-preview'=> __( 'Gemini 3 Flash Preview, stronger frontier option', 'wp-loc' ),
-            'gemini-2.5-pro'        => __( 'Gemini 2.5 Pro, highest quality', 'wp-loc' ),
-        ];
+        return isset( $models[ $model_id ] ) ? $model_id : (string) array_key_first( $models );
     }
 
     public static function should_ai_translate_custom_menu_links(): bool {
         return (bool) get_option( self::AI_TRANSLATE_CUSTOM_MENU_LINKS_OPTION_KEY, false );
+    }
+
+    public function migrate_legacy_ai_settings(): void {
+        $legacy_engine = sanitize_key( (string) get_option( self::AI_ENGINE_OPTION_KEY, '' ) );
+        $engine = self::normalize_ai_engine( $legacy_engine );
+        $legacy_model_options = [
+            'openai'    => 'wp_loc_openai_model',
+            'anthropic' => 'wp_loc_claude_model',
+            'google'    => 'wp_loc_gemini_model',
+        ];
+        $saved_models = get_option( self::AI_MODELS_OPTION_KEY, [] );
+        $saved_models = is_array( $saved_models ) ? $saved_models : [];
+        $models_changed = false;
+
+        foreach ( $legacy_model_options as $provider_id => $legacy_option ) {
+            if ( ! empty( $saved_models[ $provider_id ] ) ) {
+                continue;
+            }
+
+            $legacy_model = get_option( $legacy_option, '' );
+
+            if ( is_string( $legacy_model ) && trim( $legacy_model ) !== '' ) {
+                $saved_models[ $provider_id ] = sanitize_text_field( trim( $legacy_model ) );
+                $models_changed = true;
+            }
+        }
+
+        if ( $models_changed ) {
+            update_option( self::AI_MODELS_OPTION_KEY, $saved_models );
+        }
+
+        if ( $legacy_engine !== '' && $engine !== $legacy_engine ) {
+            update_option( self::AI_ENGINE_OPTION_KEY, $engine );
+        }
+
+        foreach ( [
+            'wp_loc_openai_api_key',
+            'wp_loc_openai_model',
+            'wp_loc_claude_api_key',
+            'wp_loc_claude_model',
+            'wp_loc_gemini_api_key',
+            'wp_loc_gemini_model',
+        ] as $legacy_option ) {
+            delete_option( $legacy_option );
+        }
     }
 
     public function handle_save(): void {
@@ -581,37 +588,26 @@ TWIG;
             update_option( self::ENABLE_YOAST_COMPAT_OPTION_KEY, $enable_yoast_compat );
             update_option( self::ENABLE_YOAST_SITEMAP_ALTERNATES_OPTION_KEY, $enable_yoast_sitemap_alternates );
         } elseif ( $current_tab === self::TAB_AI ) {
-            $ai_engine = isset( $_POST['wp_loc_ai_engine'] ) ? sanitize_key( (string) $_POST['wp_loc_ai_engine'] ) : 'openai';
-            if ( ! in_array( $ai_engine, [ 'openai', 'claude', 'gemini' ], true ) ) {
-                $ai_engine = 'openai';
+            $providers = WP_LOC_AI::get_connected_providers();
+            $ai_engine = isset( $_POST['wp_loc_ai_engine'] ) ? sanitize_key( (string) $_POST['wp_loc_ai_engine'] ) : '';
+
+            if ( isset( $providers[ $ai_engine ] ) ) {
+                $models = WP_LOC_AI::get_provider_models( $ai_engine );
+                $ai_model = isset( $_POST['wp_loc_ai_model'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_ai_model'] ) ) : '';
+
+                if ( ! isset( $models[ $ai_model ] ) ) {
+                    $ai_model = $models !== [] ? (string) array_key_first( $models ) : '';
+                }
+
+                update_option( self::AI_ENGINE_OPTION_KEY, $ai_engine );
+
+                if ( $ai_model !== '' ) {
+                    $saved_models = get_option( self::AI_MODELS_OPTION_KEY, [] );
+                    $saved_models = is_array( $saved_models ) ? $saved_models : [];
+                    $saved_models[ $ai_engine ] = $ai_model;
+                    update_option( self::AI_MODELS_OPTION_KEY, $saved_models );
+                }
             }
-
-            $openai_api_key = isset( $_POST['wp_loc_openai_api_key'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_openai_api_key'] ) ) : '';
-            $openai_model = isset( $_POST['wp_loc_openai_model'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_openai_model'] ) ) : 'gpt-5.4-mini';
-            $claude_api_key = isset( $_POST['wp_loc_claude_api_key'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_claude_api_key'] ) ) : '';
-            $claude_model = isset( $_POST['wp_loc_claude_model'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_claude_model'] ) ) : 'claude-sonnet-4-6';
-            $gemini_api_key = isset( $_POST['wp_loc_gemini_api_key'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_gemini_api_key'] ) ) : '';
-            $gemini_model = isset( $_POST['wp_loc_gemini_model'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_gemini_model'] ) ) : 'gemini-2.5-flash';
-
-            if ( ! array_key_exists( $openai_model, self::get_openai_models() ) ) {
-                $openai_model = 'gpt-5.4-mini';
-            }
-
-            if ( ! array_key_exists( $claude_model, self::get_claude_models() ) ) {
-                $claude_model = 'claude-sonnet-4-6';
-            }
-
-            if ( ! array_key_exists( $gemini_model, self::get_gemini_models() ) ) {
-                $gemini_model = 'gemini-2.5-flash';
-            }
-
-            update_option( self::AI_ENGINE_OPTION_KEY, $ai_engine );
-            update_option( self::OPENAI_API_KEY_OPTION_KEY, $openai_api_key );
-            update_option( self::OPENAI_MODEL_OPTION_KEY, $openai_model );
-            update_option( self::CLAUDE_API_KEY_OPTION_KEY, $claude_api_key );
-            update_option( self::CLAUDE_MODEL_OPTION_KEY, $claude_model );
-            update_option( self::GEMINI_API_KEY_OPTION_KEY, $gemini_api_key );
-            update_option( self::GEMINI_MODEL_OPTION_KEY, $gemini_model );
         }
 
         wp_redirect( add_query_arg( [
@@ -664,23 +660,38 @@ TWIG;
         $enable_acf_compat = self::is_acf_compat_enabled();
         $enable_yoast_compat = self::is_yoast_compat_enabled();
         $enable_yoast_sitemap_alternates = self::is_yoast_sitemap_alternates_enabled();
-        $ai_engine = self::get_ai_engine();
-        $openai_api_key = self::get_openai_api_key();
-        $openai_model = self::get_openai_model();
-        $claude_api_key = self::get_claude_api_key();
-        $claude_model = self::get_claude_model();
-        $gemini_api_key = self::get_gemini_api_key();
-        $gemini_model = self::get_gemini_model();
         $translate_custom_menu_links = self::should_ai_translate_custom_menu_links();
         $current_tab = $this->get_current_tab();
-        $ai_engines = [
-            'openai' => __( 'OpenAI', 'wp-loc' ),
-            'claude' => __( 'Claude', 'wp-loc' ),
-            'gemini' => __( 'Gemini', 'wp-loc' ),
-        ];
-        $openai_models = self::get_openai_models();
-        $claude_models = self::get_claude_models();
-        $gemini_models = self::get_gemini_models();
+        $core_ai_available = WP_LOC_AI::is_core_ai_available();
+        $ai_engines = [];
+        $ai_models_by_provider = [];
+        $ai_selected_models_by_provider = [];
+        $ai_engine = '';
+        $ai_model = '';
+        $has_ai_models = false;
+
+        if ( $current_tab === self::TAB_AI && $core_ai_available ) {
+            $ai_engines = WP_LOC_AI::get_connected_providers();
+            $saved_ai_models = get_option( self::AI_MODELS_OPTION_KEY, [] );
+            $saved_ai_models = is_array( $saved_ai_models ) ? $saved_ai_models : [];
+
+            foreach ( array_keys( $ai_engines ) as $provider_id ) {
+                $ai_models_by_provider[ $provider_id ] = WP_LOC_AI::get_provider_models( $provider_id );
+                $saved_model = isset( $saved_ai_models[ $provider_id ] )
+                    ? sanitize_text_field( (string) $saved_ai_models[ $provider_id ] )
+                    : '';
+                $ai_selected_models_by_provider[ $provider_id ] = isset( $ai_models_by_provider[ $provider_id ][ $saved_model ] )
+                    ? $saved_model
+                    : (string) ( array_key_first( $ai_models_by_provider[ $provider_id ] ) ?? '' );
+
+                if ( $ai_models_by_provider[ $provider_id ] !== [] ) {
+                    $has_ai_models = true;
+                }
+            }
+
+            $ai_engine = self::get_ai_engine();
+            $ai_model = $ai_selected_models_by_provider[ $ai_engine ] ?? '';
+        }
 
         ?>
         <div class="wrap wp-loc-settings-page">
@@ -933,85 +944,69 @@ TWIG;
                     </div>
                 <?php elseif ( $current_tab === self::TAB_AI ) : ?>
                     <div class="wp-loc-settings-section">
-                        <table class="form-table" role="presentation">
-                            <tr>
-                                <th scope="row"><?php esc_html_e( 'Translation Engine', 'wp-loc' ); ?></th>
-                                <td>
-                                    <select name="wp_loc_ai_engine">
-                                        <?php foreach ( $ai_engines as $engine_key => $engine_label ) : ?>
-                                            <option value="<?php echo esc_attr( $engine_key ); ?>" <?php selected( $ai_engine, $engine_key ); ?>>
-                                                <?php echo esc_html( $engine_label ); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <p class="description"><?php esc_html_e( 'Select which AI engine should be used for automatic translation.', 'wp-loc' ); ?></p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th scope="row"><?php esc_html_e( 'OpenAI API Key', 'wp-loc' ); ?></th>
-                                <td>
-                                    <div class="wp-loc-ai-key-row">
-                                        <input type="password" name="wp_loc_openai_api_key" value="<?php echo esc_attr( $openai_api_key ); ?>" class="regular-text" autocomplete="off" spellcheck="false" />
-                                        <button type="button" class="button wp-loc-ai-key-test" data-provider="openai"><?php esc_html_e( 'Test', 'wp-loc' ); ?></button>
-                                        <span class="wp-loc-ai-key-status" aria-live="polite"></span>
-                                    </div>
-                                    <div class="wp-loc-ai-model-row">
-                                        <label class="screen-reader-text" for="wp-loc-openai-model"><?php esc_html_e( 'Model', 'wp-loc' ); ?></label>
-                                        <select id="wp-loc-openai-model" name="wp_loc_openai_model" class="wp-loc-ai-model-select">
-                                            <?php foreach ( $openai_models as $model_key => $model_label ) : ?>
-                                                <option value="<?php echo esc_attr( $model_key ); ?>" <?php selected( $openai_model, $model_key ); ?>>
-                                                    <?php echo esc_html( $model_label ); ?>
+                        <?php if ( ! $core_ai_available ) : ?>
+                            <div class="notice notice-warning inline">
+                                <p><?php esc_html_e( 'AI translation requires WordPress 7.0 or newer and the official Connectors API.', 'wp-loc' ); ?></p>
+                            </div>
+                        <?php elseif ( $ai_engines === [] ) : ?>
+                            <div class="notice notice-info inline">
+                                <p><?php esc_html_e( 'No connected AI provider was found. Connect and configure an AI provider in WordPress before enabling AI-assisted translation.', 'wp-loc' ); ?></p>
+                                <p>
+                                    <a class="button" href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>">
+                                        <?php esc_html_e( 'Manage WordPress Connectors', 'wp-loc' ); ?>
+                                    </a>
+                                </p>
+                            </div>
+                        <?php else : ?>
+                            <table class="form-table" role="presentation">
+                                <tr>
+                                    <th scope="row"><label for="wp-loc-ai-engine"><?php esc_html_e( 'Translation Engine', 'wp-loc' ); ?></label></th>
+                                    <td>
+                                        <select id="wp-loc-ai-engine" name="wp_loc_ai_engine">
+                                            <?php foreach ( $ai_engines as $engine_key => $engine_label ) : ?>
+                                                <option value="<?php echo esc_attr( $engine_key ); ?>" <?php selected( $ai_engine, $engine_key ); ?>>
+                                                    <?php echo esc_html( $engine_label ); ?>
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th scope="row"><?php esc_html_e( 'Claude API Key', 'wp-loc' ); ?></th>
-                                <td>
-                                    <div class="wp-loc-ai-key-row">
-                                        <input type="password" name="wp_loc_claude_api_key" value="<?php echo esc_attr( $claude_api_key ); ?>" class="regular-text" autocomplete="off" spellcheck="false" />
-                                        <button type="button" class="button wp-loc-ai-key-test" data-provider="claude"><?php esc_html_e( 'Test', 'wp-loc' ); ?></button>
-                                        <span class="wp-loc-ai-key-status" aria-live="polite"></span>
-                                    </div>
-                                    <div class="wp-loc-ai-model-row">
-                                        <label class="screen-reader-text" for="wp-loc-claude-model"><?php esc_html_e( 'Model', 'wp-loc' ); ?></label>
-                                        <select id="wp-loc-claude-model" name="wp_loc_claude_model" class="wp-loc-ai-model-select">
-                                            <?php foreach ( $claude_models as $model_key => $model_label ) : ?>
-                                                <option value="<?php echo esc_attr( $model_key ); ?>" <?php selected( $claude_model, $model_key ); ?>>
+                                        <p class="description">
+                                            <?php esc_html_e( 'Only AI providers connected and configured through WordPress are available.', 'wp-loc' ); ?>
+                                            <a href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>"><?php esc_html_e( 'Manage connectors', 'wp-loc' ); ?></a>
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="wp-loc-ai-model"><?php esc_html_e( 'Model', 'wp-loc' ); ?></label></th>
+                                    <td>
+                                        <select
+                                            id="wp-loc-ai-model"
+                                            name="wp_loc_ai_model"
+                                            class="wp-loc-ai-model-select"
+                                            data-models="<?php echo esc_attr( wp_json_encode( $ai_models_by_provider ) ); ?>"
+                                            data-selected-models="<?php echo esc_attr( wp_json_encode( $ai_selected_models_by_provider ) ); ?>"
+                                            data-empty-label="<?php esc_attr_e( 'No text-generation models available', 'wp-loc' ); ?>"
+                                            <?php disabled( empty( $ai_models_by_provider[ $ai_engine ] ) ); ?>
+                                        >
+                                            <?php foreach ( $ai_models_by_provider[ $ai_engine ] ?? [] as $model_key => $model_label ) : ?>
+                                                <option value="<?php echo esc_attr( $model_key ); ?>" <?php selected( $ai_model, $model_key ); ?>>
                                                     <?php echo esc_html( $model_label ); ?>
                                                 </option>
                                             <?php endforeach; ?>
+                                            <?php if ( empty( $ai_models_by_provider[ $ai_engine ] ) ) : ?>
+                                                <option value=""><?php esc_html_e( 'No text-generation models available', 'wp-loc' ); ?></option>
+                                            <?php endif; ?>
                                         </select>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th scope="row"><?php esc_html_e( 'Gemini API Key', 'wp-loc' ); ?></th>
-                                <td>
-                                    <div class="wp-loc-ai-key-row">
-                                        <input type="password" name="wp_loc_gemini_api_key" value="<?php echo esc_attr( $gemini_api_key ); ?>" class="regular-text" autocomplete="off" spellcheck="false" />
-                                        <button type="button" class="button wp-loc-ai-key-test" data-provider="gemini"><?php esc_html_e( 'Test', 'wp-loc' ); ?></button>
-                                        <span class="wp-loc-ai-key-status" aria-live="polite"></span>
-                                    </div>
-                                    <div class="wp-loc-ai-model-row">
-                                        <label class="screen-reader-text" for="wp-loc-gemini-model"><?php esc_html_e( 'Model', 'wp-loc' ); ?></label>
-                                        <select id="wp-loc-gemini-model" name="wp_loc_gemini_model" class="wp-loc-ai-model-select">
-                                            <?php foreach ( $gemini_models as $model_key => $model_label ) : ?>
-                                                <option value="<?php echo esc_attr( $model_key ); ?>" <?php selected( $gemini_model, $model_key ); ?>>
-                                                    <?php echo esc_html( $model_label ); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                </td>
-                            </tr>
-                        </table>
+                                        <p class="description"><?php esc_html_e( 'Available text-generation models are loaded from the selected provider connector.', 'wp-loc' ); ?></p>
+                                    </td>
+                                </tr>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
-                <?php submit_button( __( 'Save', 'wp-loc' ) ); ?>
+                <?php if ( $current_tab !== self::TAB_AI || $has_ai_models ) : ?>
+                    <?php submit_button( __( 'Save', 'wp-loc' ) ); ?>
+                <?php endif; ?>
             </form>
 
             <?php if ( $current_tab === self::TAB_SWITCHER ) : ?>
@@ -1021,27 +1016,4 @@ TWIG;
         <?php
     }
 
-    public function ajax_test_ai_key(): void {
-        check_ajax_referer( 'wp_loc_ajax', 'nonce' );
-
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( [ 'message' => __( 'You do not have permission to do that.', 'wp-loc' ) ], 403 );
-        }
-
-        $provider = isset( $_POST['provider'] ) ? sanitize_key( (string) $_POST['provider'] ) : '';
-        $api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( trim( (string) $_POST['api_key'] ) ) : '';
-        $model = isset( $_POST['model'] ) ? sanitize_text_field( trim( (string) $_POST['model'] ) ) : '';
-
-        if ( ! in_array( $provider, [ 'openai', 'claude', 'gemini' ], true ) ) {
-            wp_send_json_error( [ 'message' => __( 'Unknown AI provider.', 'wp-loc' ) ], 400 );
-        }
-
-        $result = WP_LOC_AI::test_provider( $provider, $api_key, $model );
-
-        if ( is_wp_error( $result ) ) {
-            wp_send_json_error( [ 'message' => $result->get_error_message() ], 400 );
-        }
-
-        wp_send_json_success( $result );
-    }
 }

@@ -29,22 +29,16 @@ class WP_LOC_Content {
     }
 
     /**
-     * Build target-language term IDs for a taxonomy based on the source post terms.
+     * Build target-language term IDs from relationships that belong to the source language.
      *
      * @return int[]
      */
     private function get_translated_post_term_ids( int $post_id, string $taxonomy, string $target_lang, ?string $source_lang = null ): array {
-        // Read the raw stored term ids. In WP-CLI/cron the term-language filters are
-        // active (is_admin() is false) and would remap/hide these ids to the context
-        // language — reading e.g. a ru product's terms would return uk-remapped or
-        // empty ids, which sync_post_terms would then write over every sibling. Disable
-        // the filters around the read so we get the real stored ids; $source_lang then
-        // drives the correct translation below.
-        $this->set_term_language_filters( false );
-        $source_term_ids = wp_get_object_terms( $post_id, $taxonomy, [
-            'fields' => 'ids',
-        ] );
-        $this->set_term_language_filters( true );
+        $source_term_ids = WP_LOC_Terms::without_language_filter(
+            static fn() => wp_get_object_terms( $post_id, $taxonomy, [
+                'fields' => 'ids',
+            ] )
+        );
 
         if ( is_wp_error( $source_term_ids ) || empty( $source_term_ids ) ) {
             return [];
@@ -57,12 +51,22 @@ class WP_LOC_Content {
         }
 
         $target_term_ids = [];
-        $fallback_term_ids = [];
 
         foreach ( $source_term_ids as $source_term_id ) {
-            $resolved_source_lang = $source_lang ?: WP_LOC_Terms::get_term_language( $source_term_id, $taxonomy ) ?: WP_LOC_Terms::get_context_language();
+            $term_lang = WP_LOC_Terms::get_term_language( $source_term_id, $taxonomy );
 
-            if ( $resolved_source_lang === $target_lang ) {
+            // A translated post must never retain a registered term from another language.
+            if ( $source_lang && $term_lang && $term_lang !== $source_lang ) {
+                continue;
+            }
+
+            // Legacy/unregistered terms are language-neutral until they are adopted.
+            if ( ! $term_lang ) {
+                $target_term_ids[] = $source_term_id;
+                continue;
+            }
+
+            if ( $term_lang === $target_lang ) {
                 $target_term_ids[] = $source_term_id;
                 continue;
             }
@@ -71,25 +75,21 @@ class WP_LOC_Content {
 
             if ( $translated_term_id ) {
                 $target_term_ids[] = $translated_term_id;
-            } else {
-                $fallback_term_ids[] = $source_term_id;
             }
         }
 
-        $term_ids = ! empty( $target_term_ids ) ? $target_term_ids : $fallback_term_ids;
-
-        return array_values( array_unique( array_map( 'intval', $term_ids ) ) );
+        return array_values( array_unique( array_map( 'intval', $target_term_ids ) ) );
     }
 
     /**
      * Sync multilingual taxonomy relationships from one post to all its translations.
      */
-    private function sync_post_terms( int $post_id, \WP_Post $post, array $translations, ?string $source_lang = null ): void {
+    private function sync_post_terms( int $post_id, \WP_Post $post, array $translations, ?string $source_lang = null, ?array $taxonomies = null ): void {
         if ( empty( $translations ) || ! class_exists( 'WP_LOC_Terms' ) ) {
             return;
         }
 
-        $taxonomies = $this->get_syncable_taxonomies( $post->post_type );
+        $taxonomies = $taxonomies ?: $this->get_syncable_taxonomies( $post->post_type );
 
         if ( empty( $taxonomies ) ) {
             return;
@@ -106,35 +106,8 @@ class WP_LOC_Content {
     }
 
     /**
-     * Enable/disable WP-LOC's term-language filters.
-     *
-     * These filters (get_term p1 + terms_clauses p10) remap/hide terms to the
-     * current context language. In WP-CLI/cron (is_admin() false) they are active
-     * and corrupt both the term READ in get_translated_post_term_ids() and the
-     * term WRITE in assign_post_terms_in_language(), so both disable them around
-     * the raw term operation and restore them afterwards.
-     */
-    private function set_term_language_filters( bool $enabled ): void {
-        $terms_filter = ( class_exists( 'WP_LOC' ) && isset( WP_LOC::instance()->terms ) )
-            ? WP_LOC::instance()->terms
-            : null;
-
-        if ( ! $terms_filter ) {
-            return;
-        }
-
-        if ( $enabled ) {
-            add_filter( 'get_term', [ $terms_filter, 'adjust_term_to_current_language' ], 1, 2 );
-            add_filter( 'terms_clauses', [ $terms_filter, 'filter_terms_clauses' ], 10, 3 );
-        } else {
-            remove_filter( 'get_term', [ $terms_filter, 'adjust_term_to_current_language' ], 1 );
-            remove_filter( 'terms_clauses', [ $terms_filter, 'filter_terms_clauses' ], 10 );
-        }
-    }
-
-    /**
-     * Assign taxonomy terms while temporarily switching the admin term context
-     * to the target language so WP core resolves translated term IDs correctly.
+     * Assign taxonomy terms in the target context while exposing all raw relationships
+     * so WordPress can replace stale terms and resolve the exact translated IDs.
      *
      * @param int[] $term_ids
      */
@@ -151,31 +124,28 @@ class WP_LOC_Content {
             $_COOKIE['admin_lang'] = $target_locale;
         }
 
-        // In non-HTTP contexts (WP-CLI/cron) the term-language filters are active
-        // (is_admin() is false) and remap/hide the explicit target-language term
-        // ids we are about to assign. WooCommerce then sees the product as having
-        // no categories and injects the default (source-language) term. Disable the
-        // filters around the write so the translated ids are stored verbatim.
-        $this->set_term_language_filters( false );
-        wp_set_object_terms( $post_id, $term_ids, $taxonomy, false );
-        $this->set_term_language_filters( true );
+        try {
+            WP_LOC_Terms::without_language_filter(
+                static fn() => wp_set_object_terms( $post_id, $term_ids, $taxonomy, false )
+            );
+        } finally {
+            if ( $previous_lang !== null ) {
+                $_REQUEST['lang'] = $previous_lang;
+            } else {
+                unset( $_REQUEST['lang'] );
+            }
 
-        if ( $previous_lang !== null ) {
-            $_REQUEST['lang'] = $previous_lang;
-        } else {
-            unset( $_REQUEST['lang'] );
-        }
+            if ( $previous_wp_loc_lang !== null ) {
+                $_REQUEST['wp_loc_lang'] = $previous_wp_loc_lang;
+            } else {
+                unset( $_REQUEST['wp_loc_lang'] );
+            }
 
-        if ( $previous_wp_loc_lang !== null ) {
-            $_REQUEST['wp_loc_lang'] = $previous_wp_loc_lang;
-        } else {
-            unset( $_REQUEST['wp_loc_lang'] );
-        }
-
-        if ( $previous_admin_lang_cookie !== null ) {
-            $_COOKIE['admin_lang'] = $previous_admin_lang_cookie;
-        } else {
-            unset( $_COOKIE['admin_lang'] );
+            if ( $previous_admin_lang_cookie !== null ) {
+                $_COOKIE['admin_lang'] = $previous_admin_lang_cookie;
+            } else {
+                unset( $_COOKIE['admin_lang'] );
+            }
         }
     }
 
@@ -183,7 +153,59 @@ class WP_LOC_Content {
         add_action( 'wp_insert_post', [ $this, 'mark_new_post' ], 10, 3 );
         add_action( 'save_post', [ $this, 'handle_save_post' ], 20, 3 );
         add_action( 'save_post', [ $this, 'sync_translations' ], 30, 2 );
+        add_action( 'set_object_terms', [ $this, 'handle_set_object_terms' ], 20, 4 );
         add_action( 'before_delete_post', [ $this, 'handle_delete_post' ] );
+    }
+
+    /**
+     * Normalize and sync a multilingual taxonomy immediately after its relationships change.
+     *
+     * Gutenberg and REST assign terms after save_post, so save_post alone cannot reliably
+     * keep translated posts synchronized or remove stale foreign-language relationships.
+     */
+    public function handle_set_object_terms( int $object_id, $terms, array $term_taxonomy_ids, string $taxonomy ): void {
+        if ( self::$syncing || self::$creating_translations || self::$suspend_new_post_registration ) {
+            return;
+        }
+
+        $post = get_post( $object_id );
+        if ( ! $post instanceof \WP_Post ) {
+            return;
+        }
+
+        $translatable = apply_filters( 'wp_loc_translatable_post_types', [ 'post', 'page' ] );
+        if ( ! in_array( $post->post_type, $translatable, true ) || ! in_array( $taxonomy, $this->get_syncable_taxonomies( $post->post_type ), true ) ) {
+            return;
+        }
+
+        $db = WP_LOC::instance()->db;
+        $element_type = WP_LOC_DB::post_element_type( $post->post_type );
+        $source_lang = $db->get_element_language( $object_id, $element_type );
+
+        // New posts may receive terms before WP-LOC registers their language. save_post
+        // performs the same normalization after registration in that request flow.
+        if ( ! $source_lang ) {
+            return;
+        }
+
+        $trid = $db->get_trid( $object_id, $element_type );
+        $translations = $trid ? $db->get_element_translations( $trid, $element_type ) : [];
+
+        if ( ! WP_LOC_Admin_Settings::should_sync_post_taxonomies() || empty( $translations ) ) {
+            $translations = [
+                $source_lang => (object) [
+                    'element_id' => $object_id,
+                ],
+            ];
+        }
+
+        self::$syncing = true;
+
+        try {
+            $this->sync_post_terms( $object_id, $post, $translations, $source_lang, [ $taxonomy ] );
+        } finally {
+            self::$syncing = false;
+        }
     }
 
     /**
@@ -357,20 +379,12 @@ class WP_LOC_Content {
                     'post_password' => $post->post_password,
                 ];
 
-                // Resolve translated parent — only for hierarchical types (pages).
-                // For non-hierarchical types the parent is a post of a DIFFERENT type
-                // (a product_variation's parent is a product), so the element-type
-                // lookup below can never resolve and the fallback would reparent the
-                // sibling onto this post's own parent — moving e.g. a uk variation
-                // under the ru product, where the WC addon's orphan cleanup deletes it.
-                // Parents of such types are managed by their domain layer, not synced.
-                if ( is_post_type_hierarchical( $post->post_type ) ) {
-                    if ( $post->post_parent ) {
-                        $translated_parent = $db->get_element_translation( $post->post_parent, $element_type, $slug );
-                        $update_data['post_parent'] = $translated_parent ?: $post->post_parent;
-                    } else {
-                        $update_data['post_parent'] = 0;
-                    }
+                // Resolve translated parent
+                if ( $post->post_parent ) {
+                    $translated_parent = $db->get_element_translation( $post->post_parent, $element_type, $slug );
+                    $update_data['post_parent'] = $translated_parent ?: $post->post_parent;
+                } else {
+                    $update_data['post_parent'] = 0;
                 }
 
                 wp_update_post( $update_data );

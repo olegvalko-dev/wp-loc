@@ -611,155 +611,6 @@
         });
     })();
 
-    (function initAiTranslateTool() {
-        const page = document.querySelector('.wp-loc-tools-page');
-        const tool = page ? page.querySelector('.wp-loc-ai-translate-tool') : null;
-
-        if (!page || !tool || !window.wpLocAdmin) {
-            return;
-        }
-
-        const feedback = tool.querySelector('.wp-loc-ai-translate-feedback');
-        const targetSelect = tool.querySelector('.wp-loc-ai-target-lang');
-        const submitButton = tool.querySelector('.wp-loc-ai-translate-submit');
-        const i18n = Object.assign({
-            requestFailed: 'Request failed.',
-            translateFailed: 'Translation failed.',
-            translating: 'Translating...',
-            translationInserted: 'Translation inserted into the editor.',
-            emptyTextToTranslate: 'Enter text to translate first.',
-            selectTargetLanguage: 'Select a target language.'
-        }, wpLocAdmin.i18n || {});
-        let busy = false;
-
-        const editorId = 'wp_loc_ai_translate_editor';
-
-        const getEditorContent = function() {
-            if (window.tinyMCE && window.tinyMCE.get(editorId)) {
-                return window.tinyMCE.get(editorId).getContent();
-            }
-
-            const textarea = document.getElementById(editorId);
-            return textarea ? textarea.value : '';
-        };
-
-        const hasTranslatableContent = function(content) {
-            const textOnly = String(content || '')
-                .replace(/<[^>]*>/g, ' ')
-                .replace(/&nbsp;/gi, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            return textOnly.length > 0;
-        };
-
-        const setEditorContent = function(content) {
-            if (window.tinyMCE && window.tinyMCE.get(editorId)) {
-                const editor = window.tinyMCE.get(editorId);
-
-                editor.undoManager.transact(function() {
-                    editor.setContent(content, { format: 'raw' });
-                });
-                editor.nodeChanged();
-                editor.save();
-                editor.fire('change');
-                editor.fire('input');
-                editor.focus();
-            }
-
-            const textarea = document.getElementById(editorId);
-            if (textarea) {
-                textarea.value = content;
-            }
-        };
-
-        const setFeedback = function(message, type) {
-            if (!feedback) {
-                return;
-            }
-
-            feedback.className = 'wp-loc-menu-sync-feedback wp-loc-ai-translate-feedback';
-
-            if (!message) {
-                feedback.innerHTML = '';
-                return;
-            }
-
-            if (type) {
-                feedback.classList.add('is-' + type);
-            }
-
-            feedback.innerHTML = '<p>' + message + '</p>';
-        };
-
-        const setBusy = function(nextBusy) {
-            busy = nextBusy;
-
-            [submitButton, targetSelect].forEach(function(button) {
-                if (button) {
-                    button.disabled = nextBusy;
-                }
-            });
-
-            if (!nextBusy && submitButton && targetSelect) {
-                submitButton.disabled = !targetSelect.value;
-            }
-        };
-
-        if (targetSelect && submitButton) {
-            const syncTranslateButtonState = function() {
-                submitButton.disabled = busy || !targetSelect.value;
-            };
-
-            targetSelect.addEventListener('change', syncTranslateButtonState);
-            syncTranslateButtonState();
-        }
-
-        if (submitButton) {
-            submitButton.addEventListener('click', function() {
-                if (busy) {
-                    return;
-                }
-
-                const content = getEditorContent();
-                const targetLang = targetSelect ? targetSelect.value : '';
-
-                if (!hasTranslatableContent(content)) {
-                    setFeedback(i18n.emptyTextToTranslate, 'error');
-                    return;
-                }
-
-                if (!targetLang) {
-                    setFeedback(i18n.selectTargetLanguage, 'error');
-                    return;
-                }
-
-                setBusy(true);
-                setFeedback(i18n.translating, 'success');
-
-                $.post(wpLocAdmin.ajaxUrl, {
-                    action: 'wp_loc_ai_translate',
-                    nonce: wpLocAdmin.nonce,
-                    content: content,
-                    target_lang: targetLang
-                }).done(function(response) {
-                    if (!response || !response.success || !response.data || !response.data.content) {
-                        const message = response && response.data && response.data.message ? response.data.message : i18n.translateFailed;
-                        setFeedback(message, 'error');
-                        return;
-                    }
-
-                    setEditorContent(response.data.content);
-                    setFeedback(response.data.message || i18n.translationInserted, 'success');
-                }).fail(function() {
-                    setFeedback(i18n.requestFailed, 'error');
-                }).always(function() {
-                    setBusy(false);
-                });
-            });
-        }
-    })();
-
     (function initAcfFieldGroupMultilingualSetup() {
         if (!$('body.post-type-acf-field-group').length || !$('#wp-loc-acf-field-group-setup').length) {
             return;
@@ -794,76 +645,65 @@
         }
     })();
 
-    (function initAiKeyTests() {
-        const page = document.querySelector('.wp-loc-settings-page');
-        if (!page || !window.wpLocAdmin) {
+    (function initAiConnectorSettings() {
+        const providerSelect = document.getElementById('wp-loc-ai-engine');
+        const modelSelect = document.getElementById('wp-loc-ai-model');
+
+        if (!providerSelect || !modelSelect) {
             return;
         }
 
-        const i18n = Object.assign({
-            testing: 'Testing...',
-            test: 'Test',
-            apiKeyEmpty: 'API key is empty.',
-            requestFailed: 'Request failed.'
-        }, wpLocAdmin.i18n || {});
+        let modelsByProvider = {};
 
-        const setStatus = function(container, message, type) {
-            if (!container) {
+        try {
+            modelsByProvider = JSON.parse(modelSelect.getAttribute('data-models') || '{}');
+        } catch (error) {
+            modelsByProvider = {};
+        }
+
+        let selectedModels = {};
+
+        try {
+            selectedModels = JSON.parse(modelSelect.getAttribute('data-selected-models') || '{}');
+        } catch (error) {
+            selectedModels = {};
+        }
+
+        if (modelSelect.value) {
+            selectedModels[providerSelect.value] = modelSelect.value;
+        }
+
+        const renderModels = function() {
+            const provider = providerSelect.value;
+            const models = modelsByProvider[provider] || {};
+            const previousModel = selectedModels[provider] || '';
+
+            modelSelect.innerHTML = '';
+
+            Object.keys(models).forEach(function(modelId) {
+                const option = document.createElement('option');
+                option.value = modelId;
+                option.textContent = models[modelId];
+                option.selected = modelId === previousModel;
+                modelSelect.appendChild(option);
+            });
+
+            if (!modelSelect.options.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = modelSelect.getAttribute('data-empty-label') || 'No text-generation models available';
+                modelSelect.appendChild(option);
+                modelSelect.disabled = true;
                 return;
             }
 
-            container.className = 'wp-loc-ai-key-status';
-
-            if (type) {
-                container.classList.add('is-' + type);
-            }
-
-            container.textContent = message || '';
+            modelSelect.disabled = false;
+            selectedModels[provider] = modelSelect.value;
         };
 
-        $(document).on('click', '.wp-loc-ai-key-test', function() {
-            const button = this;
-            const provider = button.getAttribute('data-provider') || '';
-            const row = button.closest('.wp-loc-ai-key-row');
-            const cell = row ? row.parentElement : null;
-            const input = row ? row.querySelector('input[type="password"], input[type="text"]') : null;
-            const modelSelect = cell ? cell.querySelector('.wp-loc-ai-model-select') : null;
-            const status = row ? row.querySelector('.wp-loc-ai-key-status') : null;
-            const apiKey = input ? String(input.value || '').trim() : '';
-            const model = modelSelect ? String(modelSelect.value || '').trim() : '';
-
-            if (!apiKey) {
-                setStatus(status, i18n.apiKeyEmpty, 'error');
-                return;
-            }
-
-            button.disabled = true;
-            button.textContent = i18n.testing;
-            setStatus(status, '', '');
-
-            $.post(wpLocAdmin.ajaxUrl, {
-                action: 'wp_loc_test_ai_key',
-                nonce: wpLocAdmin.nonce,
-                provider: provider,
-                api_key: apiKey,
-                model: model
-            }).done(function(response) {
-                if (!response || !response.success) {
-                    const message = response && response.data && response.data.message ? response.data.message : i18n.requestFailed;
-                    setStatus(status, message, 'error');
-                    return;
-                }
-
-                setStatus(status, response.data.message || 'OK', 'success');
-            }).fail(function(xhr) {
-                const message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
-                    ? xhr.responseJSON.data.message
-                    : i18n.requestFailed;
-                setStatus(status, message, 'error');
-            }).always(function() {
-                button.disabled = false;
-                button.textContent = i18n.test;
-            });
+        providerSelect.addEventListener('change', renderModels);
+        modelSelect.addEventListener('change', function() {
+            selectedModels[providerSelect.value] = modelSelect.value;
         });
     })();
 

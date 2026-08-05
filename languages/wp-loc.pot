@@ -1,96 +1,1205 @@
-# WP-LOC Plugin Translation Template
 # Copyright (C) 2026 Vitalii Kaplia
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: WP-LOC 1.0.0\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-16 12:00+0000\n"
-"PO-Revision-Date: \n"
-"Last-Translator: \n"
-"Language-Team: \n"
-"Language: \n"
+"Project-Id-Version: WP-LOC 1.4.7\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-loc\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-07-24T19:14:38+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: wp-loc\n"
 
+#. Plugin Name of the plugin
+#: wp-loc.php
+msgid "WP-LOC"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: wp-loc.php
+msgid "https://wp-loc.com/"
+msgstr ""
+
+#. Description of the plugin
+#: wp-loc.php
+msgid "Lightweight multilanguage plugin for WordPress"
+msgstr ""
+
+#. Author of the plugin
+#: wp-loc.php
+msgid "Vitalii Kaplia"
+msgstr ""
+
+#. Author URI of the plugin
+#: wp-loc.php
+msgid "https://kaplia.pro/"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2154
+msgid "Multilingual Setup"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2170
+#: includes/class-wp-loc-acf.php:3369
+msgid "Same fields across languages"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2171
+msgid "Translate content while keeping the same field structure across all languages. Field order, layouts, and field types stay aligned."
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2174
+#: includes/class-wp-loc-acf.php:3370
+msgid "Different fields across languages"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2175
+msgid "Allow a different field structure per language. Field order, layouts, and even field availability can vary between translations."
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2178
+#: includes/class-wp-loc-acf.php:3371
+msgid "Expert"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2179
+msgid "Manually control translation preferences for each field in the group. Best for migrated field groups or advanced setups."
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2185
+msgid "Select a translation option for this field group."
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2258
+msgid "Translation preferences"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2259
+msgid "What to do with field value when the post, term, or options page is translated."
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2263
+msgctxt "ACF field translation preference"
+msgid "Don't translate"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2264
+msgctxt "ACF field translation preference"
+msgid "Copy"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2265
+msgctxt "ACF field translation preference"
+msgid "Copy once"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2266
+msgctxt "ACF field translation preference"
+msgid "Translate"
+msgstr ""
+
+#: includes/class-wp-loc-acf.php:2276
+msgid "Translation Option"
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:22
+msgid "Multilingual"
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:37
+#: includes/class-wp-loc-admin-languages.php:38
+#: includes/class-wp-loc-admin-languages.php:75
 msgid "Languages"
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:56
+#: includes/class-wp-loc-admin.php:140
+msgid "Delete this language? Its language files will also be removed from WordPress."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:57
+msgid "Slug is required."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:58
+msgid "Each language slug must be unique."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:59
+msgid "Display name is required."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:60
+msgid "Each display name must be unique."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:76
+msgid "Manage site languages, URL slugs, display labels, and ordering for the multilingual interface."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:79
 msgid "Languages saved."
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:83
+#, php-format
 msgid "Language \"%s\" deleted."
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:89
+msgid "Configured languages"
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:93
+msgid "Enabled languages"
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:97
+#: includes/class-wp-loc-db-optimization-wizard.php:67
+msgid "Default language"
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:110
+#: includes/class-wp-loc-admin-settings.php:998
 msgid "Save"
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:135
+#, php-format
 msgid "Missing slug for locale %s"
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:138
+#, php-format
 msgid "Duplicate slug \"%s\" detected."
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:144
+#, php-format
+msgid "Missing display name for locale %s"
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:152
+#, php-format
+msgid "Duplicate display name \"%s\" detected."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:265
+msgid "The default language cannot be deleted."
+msgstr ""
+
+#: includes/class-wp-loc-admin-languages.php:313
 msgid "Enabled"
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:314
 msgid "Name"
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:315
 msgid "Locale"
 msgstr ""
 
+#: includes/class-wp-loc-admin-languages.php:316
 msgid "Slug"
 msgstr ""
 
-msgid "Flag"
-msgstr ""
-
-msgid "Action"
-msgstr ""
-
-msgid "Delete"
-msgstr ""
-
-msgid "Translations"
-msgstr ""
-
-msgid "Save the post first to manage translations."
-msgstr ""
-
-msgid "Create translations"
-msgstr ""
-
-msgid "Translation Mode"
-msgstr ""
-
-msgid "Is this field shared or translatable between languages?"
-msgstr ""
-
-msgid "Shared across all languages"
-msgstr ""
-
-msgid "Translatable"
-msgstr ""
-
+#: includes/class-wp-loc-admin-languages.php:317
 msgid "Display Name"
 msgstr ""
 
-msgid "Public post types"
+#: includes/class-wp-loc-admin-languages.php:318
+msgid "Flag"
 msgstr ""
 
-msgid "Non-public post types"
+#: includes/class-wp-loc-admin-languages.php:319
+msgid "Action"
 msgstr ""
 
-msgid "Public taxonomies"
+#: includes/class-wp-loc-admin-languages.php:380
+msgid "Default"
 msgstr ""
 
-msgid "Non-public taxonomies"
+#: includes/class-wp-loc-admin-languages.php:416
+msgid "Delete"
 msgstr ""
 
+#: includes/class-wp-loc-admin-settings.php:48
+#: includes/class-wp-loc-admin-settings.php:49
+#: includes/class-wp-loc-admin-settings.php:689
+#: wp-loc.php:83
+msgid "Settings"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:75
+msgid "Content Translation"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:76
+msgid "Frontend Language Switcher"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:77
+msgid "Integrations"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:78
+#: includes/class-wp-loc-menu-sync.php:283
+msgid "AI"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:163
+msgid "Ready-to-render helper"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:166
+msgid "Outputs the default WP-LOC switcher markup and follows the switcher settings above."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:169
+msgid "Custom dropdown pattern"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:172
+msgid "Use this pattern when the theme renders the current language separately and prints the other languages in a nested list."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:175
+msgid "Custom dropdown pattern for Twig"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:178
+msgid "Use this Timber/Twig version when the switcher is rendered from a Twig template."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:184
+msgid "Switcher usage"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:185
+msgid "Add one of these snippets to the theme template where the frontend language switcher should appear."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:363
 #, php-format
 msgid "%s translation record found."
 msgid_plural "%s translation records found."
 msgstr[0] ""
 msgstr[1] ""
+
+#: includes/class-wp-loc-admin-settings.php:690
+msgid "Configure translation workflow, sync policies, frontend switcher behavior, integrations, and AI services."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:695
+msgid "Settings saved."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:707
+msgid "Translation Workflow"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:716
+msgid "Automatically create sibling post and page translations when a new source entry is saved"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:724
+msgid "Automatically create sibling term translations when a new source term is created"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:732
+msgid "Automatically create sibling nav menus for the other active languages"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:735
+msgid "These defaults control whether new translation groups are created automatically or only when you create translations manually."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:739
+msgid "Translatable Post Types"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:743
+msgid "Public post types"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:748
+msgid "Non-public post types"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:752
+msgid "Select which post types should support multilingual translations."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:756
+msgid "Translatable Taxonomies"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:760
+msgid "Public taxonomies"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:765
+msgid "Non-public taxonomies"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:769
+msgid "Select which taxonomies should support multilingual translations."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:773
+msgid "Content Sync"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:782
+msgid "Sync translated taxonomy assignments across post translations"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:790
+msgid "Sync featured images across post translations using translated attachment IDs"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:798
+msgid "Sync shared post attributes like status, author, parent, order, password, and page template"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:801
+msgid "Use these toggles to control which shared properties stay aligned across a translation group."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:805
+msgid "Menu Sync"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:814
+msgid "Try to translate custom nav menu links with AI during menu sync"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:817
+msgid "When enabled, WP Menus Sync will try to translate custom link titles and related text fields with the selected AI engine."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:826
+msgid "Flags"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:835
+msgid "Show flags in the frontend language switcher"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:838
+msgid "Controls whether flags are rendered by the frontend language switcher helper."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:842
+msgid "Labels"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:851
+msgid "Show language names in the frontend language switcher"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:854
+msgid "Turn this off if you want a more compact switcher, for example flags only."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:858
+msgid "Visibility Rules"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:867
+msgid "Hide the current language from the frontend language switcher"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:875
+msgid "Hide languages that do not have a translated target for the current singular or term archive"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:883
+msgid "When a translation is missing, fall back to the target language home URL instead of the current path"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:886
+msgid "These options are especially helpful for projects that prefer a stricter switcher with fewer fallback links."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:895
+msgid "Advanced Custom Fields"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:904
+msgid "Enable the ACF multilingual compatibility layer"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:907
+msgid "Loads the ACF integration for multilingual field groups, options, media, relation fields, and container field behavior."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:911
+msgid "Yoast SEO"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:920
+msgid "Enable Yoast SEO multilingual compatibility"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:928
+msgid "Add alternate-language links to Yoast XML sitemaps"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:931
+msgid "Use the master toggle to disable the Yoast integration entirely, or keep it enabled and control sitemap alternates separately."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:940
+msgid "AI translation requires WordPress 7.0 or newer and the official Connectors API."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:944
+msgid "No connected AI provider was found. Connect and configure an AI provider in WordPress before enabling AI-assisted translation."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:947
+msgid "Manage WordPress Connectors"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:954
+msgid "Translation Engine"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:964
+msgid "Only AI providers connected and configured through WordPress are available."
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:965
+msgid "Manage connectors"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:970
+msgid "Model"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:977
+#: includes/class-wp-loc-admin-settings.php:986
+msgid "No text-generation models available"
+msgstr ""
+
+#: includes/class-wp-loc-admin-settings.php:989
+msgid "Available text-generation models are loaded from the selected provider connector."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:88
+msgid "Auto-resolved from default language translation"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:125
+msgid "Request failed."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:126
+msgid "Translating..."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:127
+msgid "Preview refreshed."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:128
+msgid "Menu sync complete."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:129
+#: includes/class-wp-loc-admin.php:176
+#: includes/class-wp-loc-admin.php:236
+msgid "Translate title"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:130
+#: includes/class-wp-loc-terms.php:1026
+msgid "Translate term name"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:131
+#: includes/class-wp-loc-admin.php:237
+msgid "Choose target language"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:132
+#: includes/class-wp-loc-admin.php:241
+msgid "Automatically update the slug from the translated title"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:133
+#: includes/class-wp-loc-admin.php:903
+msgid "There is no title to translate."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:134
+#: includes/class-wp-loc-terms.php:1483
+msgid "There is no term name to translate."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:135
+msgid "There are no available translation targets for this post."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:136
+msgid "There are no available translation targets for this term."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:137
+#: includes/class-wp-loc-admin.php:958
+#: includes/class-wp-loc-admin.php:1000
+msgid "Title translated successfully."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:138
+#: includes/class-wp-loc-terms.php:1545
+msgid "Term name translated successfully."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:139
+#: includes/class-wp-loc-admin.php:235
+#: includes/class-wp-loc-db-optimization-wizard.php:94
+msgid "Close"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:141
+msgid "Delete this legacy config file?"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:647
+#: includes/class-wp-loc-admin.php:1191
+#: includes/class-wp-loc-terms.php:1202
+#: includes/class-wp-loc-terms.php:1262
+msgid "Translations"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:662
+msgid "Save the post first to manage translations."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:677
+#: includes/class-wp-loc-admin.php:698
+msgid "Create translations"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:722
+#: includes/class-wp-loc-admin.php:1219
+#: includes/class-wp-loc-terms.php:1240
+#: includes/class-wp-loc-terms.php:1299
+msgid "Edit translation"
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:889
+#: includes/class-wp-loc-terms.php:1466
+msgid "Missing required parameters."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:893
+#: includes/class-wp-loc-terms.php:1473
+msgid "You do not have permission to do that."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:898
+msgid "Post not found."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:911
+msgid "Source post language was not found."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:923
+#: includes/class-wp-loc-admin.php:932
+msgid "Translation post was not found for the selected language."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:927
+msgid "You do not have permission to edit the translation post."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:939
+msgid "Title translation failed."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:1026
+#: includes/class-wp-loc-admin.php:1038
+#: includes/class-wp-loc-admin.php:1060
+msgid "Creating new content is only available in the primary language of the site. Switch to the default language first."
+msgstr ""
+
+#: includes/class-wp-loc-admin.php:1027
+#: includes/class-wp-loc-admin.php:1039
+#: includes/class-wp-loc-admin.php:1061
+msgid "Action not allowed"
+msgstr ""
+
+#: includes/class-wp-loc-ai.php:97
+msgid "The AI prompt is empty."
+msgstr ""
+
+#: includes/class-wp-loc-ai.php:101
+msgid "AI translation requires WordPress 7.0 or newer."
+msgstr ""
+
+#: includes/class-wp-loc-ai.php:107
+msgid "No connected AI provider is available."
+msgstr ""
+
+#: includes/class-wp-loc-ai.php:113
+msgid "No text-generation model is available for the selected AI provider."
+msgstr ""
+
+#: includes/class-wp-loc-ai.php:135
+msgid "The AI provider returned an empty response."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:44
+msgid "Request failed. Please try again."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:45
+#: includes/class-wp-loc-db-optimization-wizard.php:117
+msgid "Scanning database..."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:46
+msgid "Optimizing database..."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:47
+msgid "No removable legacy data was found. Your database is already clean."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:48
+msgid "Are you sure you do not want to optimize the database? This wizard will be dismissed and WP-LOC will continue without cleaning legacy multilingual data."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:49
+msgid "Are you sure you want to continue? Legacy multilingual service data will be permanently removed and this action cannot be undone."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:50
+msgid "No language records were found for import."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:51
+msgid "translation links kept"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:52
+msgid "post records recognized"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:53
+msgid "term records recognized"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:54
+msgid "menu records recognized"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:55
+msgid "media records recognized"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:56
+msgid "languages detected"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:57
+msgid "localized options detected"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:58
+msgid "field preferences detected"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:59
+#: includes/class-wp-loc-db-optimization-wizard.php:113
+msgid "Kept by WP-LOC"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:60
+#: includes/class-wp-loc-db-optimization-wizard.php:114
+msgid "Compatible translation links remain in place and continue powering posts, pages, media, terms, and menus."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:61
+msgid "Content types found"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:62
+msgid "No translated post types were found."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:63
+msgid "Taxonomies found"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:64
+msgid "No translated taxonomies were found."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:65
+msgid "Languages to adopt"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:66
+msgid "Adopt as"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:68
+msgid "Exact match"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:69
+msgid "Slug normalized"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:70
+msgid "Locale match"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:71
+msgid "Code match"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:72
+msgid "WordPress match"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:73
+#: includes/class-wp-loc-menu-sync.php:238
+msgid "Needs review"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:74
+msgid "Manual match"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:75
+msgid "Legacy data to remove"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:76
+#, php-format
+msgid "%1$s option rows and %2$s meta rows are marked for cleanup."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:77
+msgid "languages imported"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:78
+msgid "legacy tables removed"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:79
+msgid "option rows removed"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:80
+msgid "meta rows removed"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:81
+msgid "WP-LOC is ready to continue with the optimized multilingual database."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:97
+msgid "Database optimization"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:98
+msgid "Prepare multilingual data for WP-LOC"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:99
+msgid "WP-LOC can scan multilingual data left by another plugin, adopt compatible translation links, and remove obsolete service data after your confirmation."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:101
+msgid "Continue"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:102
+#: includes/class-wp-loc-db-optimization-wizard.php:121
+msgid "Do not optimize database"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:109
+msgid "Review"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:110
+msgid "Database scan summary"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:120
+msgid "Agree and optimize"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:126
+msgid "Optimization"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:127
+msgid "Optimizing database"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:129
+msgid "Please wait while WP-LOC applies the selected cleanup."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:133
+msgid "Complete"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:134
+msgid "Database optimization completed"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:137
+msgid "Continue using WP-LOC"
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:182
+#: includes/class-wp-loc-menu-sync.php:151
+msgid "You are not allowed to do this."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:363
+msgid "Invalid language mapping selected."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:367
+msgid "Each detected language must be mapped to a unique WP-LOC language."
+msgstr ""
+
+#: includes/class-wp-loc-db-optimization-wizard.php:398
+msgid "Invalid language mapping payload."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:24
+#: includes/class-wp-loc-menu-sync.php:25
+#: includes/class-wp-loc-menu-sync.php:914
+msgid "Tools"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:50
+msgid "WP Menus Sync"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:51
+msgid "Config Migration"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:137
+#, php-format
+msgid "Menu sync complete. Synced %1$d targets, created %2$d menus, created %3$d items, skipped %4$d untranslated linked items."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:232
+msgid "Missing translation"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:243
+msgid "Needs sync"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:246
+msgid "Up to date"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:281
+msgid "Translation"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:282
+msgid "Option"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:284
+msgid "Warning"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:285
+msgid "Structure"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:295
+msgid "Apply changes"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:298
+msgid "Refresh"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:302
+msgid "Select all"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:303
+msgid "Deselect all"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:333
+msgid "Active theme"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:341
+msgid "Parent theme"
+msgstr ""
+
+#. translators: %s: plugin directory
+#: includes/class-wp-loc-menu-sync.php:358
+#, php-format
+msgid "Plugin: %s"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:627
+msgid "wp-loc-config.xml was written from the current wp-loc settings."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:628
+msgid "wp-loc-config.xml was generated from the detected legacy config file."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:629
+msgid "The legacy config file was deleted."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:630
+msgid "The selected legacy config file was not found anymore."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:631
+msgid "The detected legacy config file does not contain translatable post types or taxonomies that wp-loc uses."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:632
+msgid "Current wp-loc settings do not contain translatable post types or taxonomies to write."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:633
+msgid "Could not write wp-loc-config.xml."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:634
+msgid "Could not delete the legacy config file."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:635
+msgid "This legacy config file belongs to a plugin source and is shown as read-only here."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:651
+#: includes/class-wp-loc-menu-sync.php:667
+msgid "None found."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:689
+msgid "Status:"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:690
+msgid "Legacy config file found"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:690
+msgid "Legacy config file not found"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:696
+msgid "Current wp-loc config"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:697
+msgid "This writes a lightweight wp-loc-config.xml file for the active theme based on the translatable post types and taxonomies currently enabled in wp-loc."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:704
+msgid "Target file"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:708
+#: includes/class-wp-loc-menu-sync.php:759
+msgid "Post types"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:712
+#: includes/class-wp-loc-menu-sync.php:763
+msgid "Taxonomies"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:721
+msgid "Write wp-loc-config.xml"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:728
+msgid "Found legacy config files"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:729
+msgid "wp-loc reads only the post type and taxonomy information from supported legacy multilingual config files. Other config sections are intentionally ignored here."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:734
+msgid "No relevant legacy config files were found in the active theme or active plugins."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:743
+msgid "Theme"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:743
+msgid "Plugin"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:749
+msgid "Legacy config file"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:754
+msgid "Existing wp-loc-config.xml"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:774
+msgid "Generate wp-loc-config.xml"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:782
+msgid "Delete legacy config file"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:785
+msgid "Plugin config is shown as read-only here."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:809
+msgid "Default menus"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:813
+msgid "Targets needing sync"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:817
+msgid "Warnings"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:836
+msgid "No menus found."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:853
+#, php-format
+msgid "%s menu"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:863
+msgid "Apply"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:869
+msgid "Nothing to sync for this language."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:880
+msgid "Details"
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:916
+msgid "Utilities for maintaining multilingual data and synchronizing translated content."
+msgstr ""
+
+#. translators: %s: default language name
+#: includes/class-wp-loc-menu-sync.php:925
+#, php-format
+msgid "Menu synchronization will sync the menu structure from the default language of %s to the secondary languages."
+msgstr ""
+
+#: includes/class-wp-loc-menu-sync.php:934
+msgid "Detect legacy multilingual config files, extract only the post types and taxonomies relevant for wp-loc, and generate a lightweight wp-loc-config.xml file."
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:708
+#, php-format
+msgid "Add menu translation: %s"
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:716
+#, php-format
+msgid "Sync menu structure and order (%d items)"
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:717
+#, php-format
+msgid "Sync menu structure (%d items)"
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:724
+#, php-format
+msgid "Remove outdated items (%d)"
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:731
+#, php-format
+msgid "Update menu option auto_add to %s"
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:738
+#, php-format
+msgid "Translate custom links with AI (%d)"
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:745
+#, php-format
+msgid "Skip untranslated linked items (%d)"
+msgstr ""
+
+#. translators: 1: language name, 2: menu name
+#: includes/class-wp-loc-menus.php:1388
+#, php-format
+msgid "Creating %1$s translation of \"%2$s\"."
+msgstr ""
+
+#: includes/class-wp-loc-menus.php:1407
+msgid "Translations:"
+msgstr ""
+
+#: includes/class-wp-loc-terms.php:1188
+msgid "This term cannot be deleted because it belongs to the default category translation group."
+msgstr ""
+
+#: includes/class-wp-loc-terms.php:1478
+msgid "Term not found."
+msgstr ""
+
+#: includes/class-wp-loc-terms.php:1490
+#: includes/class-wp-loc-terms.php:1508
+msgid "Translation term was not found for the selected language."
+msgstr ""
+
+#: includes/class-wp-loc-terms.php:1514
+#: includes/class-wp-loc-terms.php:1538
+msgid "Term name translation failed."
+msgstr ""
+
+#: includes/class-wp-loc-terms.php:1568
+#, php-format
+msgid "Creating a translation in %s."
+msgstr ""
+
+#: wp-loc.php:67
+msgid "Sorry, you are not allowed to do that."
+msgstr ""
+
+#: wp-loc.php:91
+msgid "Wizard"
+msgstr ""
