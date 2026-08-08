@@ -258,6 +258,7 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - The language prefix is applied to `page_link`, `post_link`, and `post_type_link` at priority `9999`, after themes and plugins finish building custom (taxonomy-driven) permalink paths, so translated custom post type URLs keep their target-language path instead of losing the prefix
 - Compatibility switcher APIs such as `icl_get_languages()` use the same translated URLs as WP-LOC's native switcher helpers
 - Frontend requests persist `wp_loc_current_language`, `wp_loc_current_locale`, `_icl_current_language`, and `wp-wpml_current_language` cookies so same-origin AJAX calls to `admin-ajax.php` keep the expected language context
+- A cookie is only written when its value actually changes. Re-sending an identical cookie would be invisible to the visitor but adds a `Set-Cookie` header, and shared caches treat any response carrying one as personalised — so a CDN would refuse to store it. Since language is resolved from the URL prefix, a returning visitor's requests stay header-clean and remain cacheable at the edge
 
 ## Compatibility Note
 

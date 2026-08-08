@@ -879,6 +879,16 @@ class WP_LOC_Routing {
             '_icl_current_language' => $compat_code,
             'wp-wpml_current_language' => $compat_code,
         ] as $cookie_name => $cookie_value ) {
+            // Re-sending a cookie that already holds this exact value changes nothing for the
+            // visitor, but it does add a Set-Cookie header — and a response carrying Set-Cookie
+            // is treated as personalised by every shared cache, so CDNs refuse to store it.
+            // Because set_locale() runs on every frontend request, that used to mean four
+            // Set-Cookie headers on every page view and an origin that could never be cached
+            // at the edge. Now only a genuine change is written.
+            if ( isset( $_COOKIE[ $cookie_name ] ) && $_COOKIE[ $cookie_name ] === $cookie_value ) {
+                continue;
+            }
+
             setcookie( $cookie_name, $cookie_value, $expires, $path, $domain );
             $_COOKIE[ $cookie_name ] = $cookie_value;
         }
