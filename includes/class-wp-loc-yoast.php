@@ -110,13 +110,20 @@ class WP_LOC_Yoast {
         return $value;
     }
 
+    /**
+     * Give a translated term that has no SEO meta of its own the source term's values.
+     *
+     * Whatever this filter injects can end up in the database: Yoast saves term SEO by
+     * reading this option through get_option(), replacing one term's entry, and writing the
+     * whole array back (WPSEO_Taxonomy_Meta::save_clean_values()). So the filter must only
+     * ever fill gaps — overwriting a sibling that already has its own meta would destroy it
+     * permanently on the next term save, which is exactly the per-language SEO this
+     * integration exists to provide. For the same reason the result must not depend on the
+     * current request language: the fallback always comes from the group's source-language
+     * term, so the array is the same whichever language reads it.
+     */
     public function filter_wpseo_taxonomy_meta( $value ) {
         if ( ! is_array( $value ) ) {
-            return $value;
-        }
-
-        $current_lang = WP_LOC_Terms::get_context_language();
-        if ( ! $current_lang ) {
             return $value;
         }
 
@@ -127,79 +134,128 @@ class WP_LOC_Yoast {
 
         $filtering = true;
 
-        foreach ( $value as $taxonomy => $term_meta_map ) {
-            if ( ! is_string( $taxonomy ) || ! WP_LOC_Terms::is_translatable( $taxonomy ) || ! is_array( $term_meta_map ) ) {
-                continue;
-            }
-
-            $group_cache = [];
-
-            foreach ( array_keys( $term_meta_map ) as $term_id ) {
-                $term_id = (int) $term_id;
-                if ( $term_id <= 0 ) {
+        try {
+            foreach ( $value as $taxonomy => $term_meta_map ) {
+                if ( ! is_string( $taxonomy ) || ! WP_LOC_Terms::is_translatable( $taxonomy ) || ! is_array( $term_meta_map ) ) {
                     continue;
                 }
 
-                $term_taxonomy_id = WP_LOC_Terms::get_term_taxonomy_id( $term_id, $taxonomy );
-                if ( ! $term_taxonomy_id ) {
-                    continue;
-                }
+                $element_type = WP_LOC_DB::tax_element_type( $taxonomy );
+                $handled_trids = [];
 
-                $trid = WP_LOC::instance()->db->get_trid( $term_taxonomy_id, WP_LOC_DB::tax_element_type( $taxonomy ) );
-                if ( ! $trid ) {
-                    continue;
-                }
+                foreach ( array_keys( $term_meta_map ) as $term_id ) {
+                    $term_id = (int) $term_id;
 
-                if ( ! isset( $group_cache[ $trid ] ) ) {
-                    $translations = WP_LOC::instance()->db->get_element_translations( $trid, WP_LOC_DB::tax_element_type( $taxonomy ) );
-                    $term_ids = [];
-
-                    foreach ( $translations as $lang_code => $translation ) {
-                        $translated_term_id = WP_LOC_Terms::get_term_id_from_taxonomy_id( (int) $translation->element_id, $taxonomy );
-                        if ( $translated_term_id ) {
-                            $term_ids[ $lang_code ] = $translated_term_id;
-                        }
+                    if ( $term_id <= 0 || empty( $term_meta_map[ $term_id ] ) || ! is_array( $term_meta_map[ $term_id ] ) ) {
+                        continue;
                     }
 
-                    $preferred_term_id = $term_ids[ $current_lang ] ?? 0;
-                    $preferred_meta = $preferred_term_id && ! empty( $term_meta_map[ $preferred_term_id ] ) && is_array( $term_meta_map[ $preferred_term_id ] )
-                        ? $term_meta_map[ $preferred_term_id ]
+                    $term_taxonomy_id = WP_LOC_Terms::get_term_taxonomy_id( $term_id, $taxonomy );
+                    if ( ! $term_taxonomy_id ) {
+                        continue;
+                    }
+
+                    $trid = WP_LOC::instance()->db->get_trid( $term_taxonomy_id, $element_type );
+                    if ( ! $trid || isset( $handled_trids[ $trid ] ) ) {
+                        continue;
+                    }
+
+                    $handled_trids[ $trid ] = true;
+
+                    $translations = WP_LOC::instance()->db->get_element_translations( $trid, $element_type );
+                    $source_lang = $this->get_source_language_from_translations( $translations );
+
+                    if ( $source_lang === null ) {
+                        continue;
+                    }
+
+                    $source_term_id = WP_LOC_Terms::get_term_id_from_taxonomy_id( (int) $translations[ $source_lang ]->element_id, $taxonomy );
+                    $source_meta = $source_term_id && ! empty( $term_meta_map[ $source_term_id ] ) && is_array( $term_meta_map[ $source_term_id ] )
+                        ? $term_meta_map[ $source_term_id ]
                         : null;
 
-                    if ( ! $preferred_meta ) {
-                        $source_lang = null;
-                        foreach ( $translations as $lang_code => $translation ) {
-                            if ( empty( $translation->source_language_code ) ) {
-                                $source_lang = $lang_code;
-                                break;
-                            }
-                        }
-
-                        $source_term_id = $source_lang && ! empty( $term_ids[ $source_lang ] ) ? $term_ids[ $source_lang ] : 0;
-                        $preferred_meta = $source_term_id && ! empty( $term_meta_map[ $source_term_id ] ) && is_array( $term_meta_map[ $source_term_id ] )
-                            ? $term_meta_map[ $source_term_id ]
-                            : null;
+                    if ( ! $source_meta ) {
+                        continue;
                     }
 
-                    $group_cache[ $trid ] = [
-                        'term_ids'       => array_values( array_unique( array_map( 'intval', $term_ids ) ) ),
-                        'preferred_meta' => $preferred_meta,
-                    ];
-                }
+                    foreach ( $translations as $lang_code => $translation ) {
+                        if ( (string) $lang_code === $source_lang ) {
+                            continue;
+                        }
 
-                if ( empty( $group_cache[ $trid ]['preferred_meta'] ) || ! is_array( $group_cache[ $trid ]['preferred_meta'] ) ) {
-                    continue;
-                }
+                        $sibling_term_id = WP_LOC_Terms::get_term_id_from_taxonomy_id( (int) $translation->element_id, $taxonomy );
 
-                foreach ( $group_cache[ $trid ]['term_ids'] as $group_term_id ) {
-                    $value[ $taxonomy ][ $group_term_id ] = $group_cache[ $trid ]['preferred_meta'];
+                        if ( ! $sibling_term_id || ! empty( $term_meta_map[ $sibling_term_id ] ) ) {
+                            continue;
+                        }
+
+                        $value[ $taxonomy ][ $sibling_term_id ] = $this->map_term_meta_images_to_language( $source_meta, (string) $lang_code );
+                    }
                 }
+            }
+        } finally {
+            $filtering = false;
+        }
+
+        return $value;
+    }
+
+    /**
+     * The language of the group's original term — the row that has no source_language_code.
+     */
+    private function get_source_language_from_translations( array $translations ): ?string {
+        foreach ( $translations as $lang_code => $translation ) {
+            if ( empty( $translation->source_language_code ) ) {
+                return (string) $lang_code;
             }
         }
 
-        $filtering = false;
+        return null;
+    }
 
-        return $value;
+    /**
+     * Point the attachment references inside a term's SEO meta at the given language.
+     */
+    private function map_term_meta_images_to_language( array $term_meta, string $target_lang ): array {
+        foreach ( self::TERM_IMAGE_ID_KEYS as $id_key => $url_key ) {
+            if ( empty( $term_meta[ $id_key ] ) ) {
+                continue;
+            }
+
+            $translated_attachment_id = WP_LOC::instance()->db->get_element_translation(
+                (int) $term_meta[ $id_key ],
+                WP_LOC_DB::post_element_type( 'attachment' ),
+                $target_lang
+            );
+
+            if ( ! $translated_attachment_id ) {
+                continue;
+            }
+
+            $term_meta[ $id_key ] = $translated_attachment_id;
+
+            $translated_url = wp_get_attachment_url( $translated_attachment_id );
+            if ( $translated_url ) {
+                $term_meta[ $url_key ] = $translated_url;
+            }
+        }
+
+        return $term_meta;
+    }
+
+    /**
+     * Read the Yoast term meta option with this class's own read filter suspended.
+     *
+     * Callers that decide whether a term already has meta, or that write the array back,
+     * must see the stored rows — not the gap-filled view filter_wpseo_taxonomy_meta()
+     * produces, which would make every translated term look like it already has its own.
+     */
+    private function get_raw_term_meta_option(): array {
+        remove_filter( 'option_wpseo_taxonomy_meta', [ $this, 'filter_wpseo_taxonomy_meta' ], 10 );
+        $all_meta = get_option( $this->get_wpseo_term_option_name(), [] );
+        add_filter( 'option_wpseo_taxonomy_meta', [ $this, 'filter_wpseo_taxonomy_meta' ], 10, 1 );
+
+        return is_array( $all_meta ) ? $all_meta : [];
     }
 
     public function translate_primary_term_meta( $value, int $post_id, string $meta_key, bool $single ) {
@@ -691,10 +747,13 @@ class WP_LOC_Yoast {
             return;
         }
 
-        $option_name = $this->get_wpseo_term_option_name();
-        $all_meta = get_option( $option_name, [] );
+        // Read past filter_wpseo_taxonomy_meta(): through it every translated term already
+        // shows the source term's values, so the "does this term have its own meta yet?"
+        // check below would always say yes and this copy would never run. Reading raw also
+        // keeps the write at the end from persisting that filtered view.
+        $all_meta = $this->get_raw_term_meta_option();
 
-        if ( ! is_array( $all_meta ) || empty( $all_meta[ $taxonomy ][ $source_term_id ] ) || ! is_array( $all_meta[ $taxonomy ][ $source_term_id ] ) ) {
+        if ( empty( $all_meta[ $taxonomy ][ $source_term_id ] ) || ! is_array( $all_meta[ $taxonomy ][ $source_term_id ] ) ) {
             return;
         }
 
@@ -708,31 +767,12 @@ class WP_LOC_Yoast {
             return;
         }
 
-        $term_meta = $all_meta[ $taxonomy ][ $source_term_id ];
+        $all_meta[ $taxonomy ][ $term_id ] = $this->map_term_meta_images_to_language(
+            $all_meta[ $taxonomy ][ $source_term_id ],
+            $target_lang
+        );
 
-        foreach ( self::TERM_IMAGE_ID_KEYS as $id_key => $url_key ) {
-            if ( empty( $term_meta[ $id_key ] ) ) {
-                continue;
-            }
-
-            $translated_attachment_id = WP_LOC::instance()->db->get_element_translation(
-                (int) $term_meta[ $id_key ],
-                WP_LOC_DB::post_element_type( 'attachment' ),
-                $target_lang
-            );
-
-            if ( $translated_attachment_id ) {
-                $term_meta[ $id_key ] = $translated_attachment_id;
-
-                $translated_url = wp_get_attachment_url( $translated_attachment_id );
-                if ( $translated_url ) {
-                    $term_meta[ $url_key ] = $translated_url;
-                }
-            }
-        }
-
-        $all_meta[ $taxonomy ][ $term_id ] = $term_meta;
-        update_option( $option_name, $all_meta );
+        update_option( $this->get_wpseo_term_option_name(), $all_meta );
     }
 
     private function get_source_term_id( int $term_id, string $taxonomy ): ?int {

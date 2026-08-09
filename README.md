@@ -215,6 +215,7 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - Global Yoast options such as `wpseo_titles`, `wpseo_social`, and `wpseo_rss` can be localized per language through the same multilingual options model used by WP-LOC
 - Yoast primary category meta is resolved to the translated term in the current post language
 - Yoast taxonomy SEO meta is copied into translated terms so translated archives keep their own SEO title/description state
+- A translated term that has no SEO meta of its own falls back to the source term's values. A translated term that *does* have its own keeps it: editing the SEO of any term in a translation group never overwrites its siblings, in either direction
 - Yoast indexables are invalidated after multilingual post, term, and global-option updates so Yoast can rebuild its cached SEO data
 - Yoast XML sitemaps gain `xhtml:link` alternate-language entries for translated posts, pages, terms, and first archive links
 - Yoast `stripcategorybase` rewrites remain compatible with multilingual category slugs
