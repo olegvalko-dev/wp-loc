@@ -365,7 +365,7 @@ class WP_LOC_Routing {
             return;
         }
 
-        $relative_path = $this->get_request_path_relative_to_home( $path );
+        $relative_path = self::get_request_path_relative_to_home( $path );
 
         if ( ! in_array( $relative_path, WP_LOC_Languages::get_additional_languages(), true ) ) {
             return;
@@ -383,7 +383,7 @@ class WP_LOC_Routing {
         exit;
     }
 
-    private function get_request_path_relative_to_home( string $request_path ): string {
+    private static function get_request_path_relative_to_home( string $request_path ): string {
         $request_path = trim( $request_path, '/' );
         $home_path = trim( (string) wp_parse_url( set_url_scheme( get_option( 'home' ) ), PHP_URL_PATH ), '/' );
 
@@ -481,7 +481,7 @@ class WP_LOC_Routing {
 
     private function get_language_prefix_from_url( string $url ): ?string {
         $path = (string) wp_parse_url( $url, PHP_URL_PATH );
-        $relative_path = $this->get_request_path_relative_to_home( $path );
+        $relative_path = self::get_request_path_relative_to_home( $path );
         $first_segment = strtok( $relative_path, '/' );
 
         if ( ! is_string( $first_segment ) || $first_segment === '' ) {
@@ -748,18 +748,70 @@ class WP_LOC_Routing {
             return false;
         }
 
+        $referer = self::get_referer_url();
+
+        // Only a referer pointing into wp-admin marks a request as an admin one. Everything
+        // else is treated as frontend — including a request with no referer at all. Admin
+        // AJAX practically always carries a wp-admin referer (or `_wp_http_referer`), while
+        // a frontend visitor can legitimately arrive without one under
+        // `Referrer-Policy: no-referrer`, behind a stripping proxy, or from a browser
+        // extension. Keying this on the presence of a language cookie instead would classify
+        // a first-time visitor — who has no cookies yet — as an admin request and silently
+        // skip localized option lookups for them.
+        return $referer === null || ! self::is_admin_referer( $referer );
+    }
+
+    private static function get_referer_url(): ?string {
         $referer = wp_get_referer();
 
         if ( ! $referer && ! empty( $_SERVER['HTTP_REFERER'] ) ) {
             $referer = (string) wp_unslash( $_SERVER['HTTP_REFERER'] );
         }
 
-        if ( $referer ) {
-            $admin_url = admin_url();
-            return ! str_starts_with( trailingslashit( $referer ), trailingslashit( $admin_url ) );
+        return $referer ? (string) $referer : null;
+    }
+
+    /**
+     * Whether a referring URL points into this site's wp-admin.
+     *
+     * Host and path are compared separately rather than prefix-matching the whole URL, so a
+     * referer that differs from admin_url() only by scheme — common behind a TLS-terminating
+     * proxy — is still recognized as an admin URL.
+     */
+    private static function is_admin_referer( string $url ): bool {
+        $admin_url = admin_url();
+        $url_host = self::get_url_host( $url );
+
+        // A host-less referer is the site-relative `_wp_http_referer` value, so it needs no
+        // host check; only its path decides whether it points into wp-admin.
+        if ( $url_host !== '' ) {
+            $admin_host = self::get_url_host( $admin_url );
+
+            if ( $admin_host === '' || $url_host !== $admin_host ) {
+                return false;
+            }
         }
 
-        return (bool) self::get_cookie_language_context();
+        $admin_path = trailingslashit( (string) wp_parse_url( $admin_url, PHP_URL_PATH ) );
+        $url_path = trailingslashit( (string) wp_parse_url( $url, PHP_URL_PATH ) );
+
+        return $admin_path !== '/' && str_starts_with( $url_path, $admin_path );
+    }
+
+    private static function is_same_site_frontend_url( string $url ): bool {
+        $url_host = self::get_url_host( $url );
+
+        // wp_get_referer() hands back `_wp_http_referer` as a site-relative path, which is
+        // same-origin by construction. Only an absolute URL has a host worth checking.
+        if ( $url_host !== '' && $url_host !== self::get_url_host( (string) get_option( 'home' ) ) ) {
+            return false;
+        }
+
+        return ! self::is_admin_referer( $url );
+    }
+
+    private static function get_url_host( string $url ): string {
+        return strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
     }
 
     public static function normalize_language_context( ?string $candidate ): ?string {
@@ -833,20 +885,26 @@ class WP_LOC_Routing {
     }
 
     private static function get_referer_language_context(): ?string {
-        $referer = wp_get_referer();
+        $referer = self::get_referer_url();
 
-        if ( ! $referer && ! empty( $_SERVER['HTTP_REFERER'] ) ) {
-            $referer = (string) wp_unslash( $_SERVER['HTTP_REFERER'] );
-        }
-
-        if ( ! $referer ) {
+        // A referer from another host says nothing about which language this site rendered.
+        if ( $referer === null || ! self::is_same_site_frontend_url( $referer ) ) {
             return null;
         }
 
-        $path = trim( (string) wp_parse_url( $referer, PHP_URL_PATH ), '/' );
-        $first = explode( '/', $path )[0] ?? '';
+        $relative_path = self::get_request_path_relative_to_home( (string) wp_parse_url( $referer, PHP_URL_PATH ) );
+        $first_segment = explode( '/', $relative_path )[0] ?? '';
+        $language = self::normalize_language_context( $first_segment );
 
-        return self::normalize_language_context( $first );
+        if ( $language ) {
+            return $language;
+        }
+
+        // A frontend URL on this site with no language prefix is not "unknown" — it is the
+        // default language, because the default language is precisely the one served without
+        // a prefix. Returning null here would hand the decision back to the cookie for every
+        // default-language page, which is exactly where a stale cookie does its damage.
+        return WP_LOC_Languages::get_default_language();
     }
 
     private static function get_ajax_language_context(): ?string {
@@ -854,7 +912,14 @@ class WP_LOC_Routing {
             return null;
         }
 
-        return self::get_cookie_language_context() ?: self::get_referer_language_context();
+        // The referer is the URL of the page the request was made from, so it carries the
+        // language the visitor is looking at right now. The cookie is written during a render
+        // (persist_frontend_language_context()), and a page served from a full-page cache
+        // never renders: PHP does not run, no Set-Cookie goes out, and the cookie can lag a
+        // language switch behind. No shared cache can send Set-Cookie without handing one
+        // visitor's cookies to the next, so this is not something a caching layer can fix.
+        // The cookie stays as the fallback for requests that arrive without a usable referer.
+        return self::get_referer_language_context() ?: self::get_cookie_language_context();
     }
 
     private function persist_frontend_language_context( string $slug ): void {

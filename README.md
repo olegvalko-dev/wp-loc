@@ -33,7 +33,7 @@ Lightweight multilingual plugin for WordPress.
 - **Selectable content types** — public post types/taxonomies and custom non-public registered objects can be enabled from settings, while internal WordPress objects and specially handled objects stay excluded
 - **Frontend/admin query filtering** — translatable posts are filtered by the current language for main, secondary, AJAX, REST, and Gutenberg preview `WP_Query` calls when filters are not suppressed
 - **Language-scoped link picker** — WordPress's native Insert/edit Link dialog only lists translatable content from the language currently being edited
-- **Frontend AJAX language context** — standard `admin-ajax.php` handlers inherit the current frontend language through compatible cookies, request parameters, and referring URLs
+- **Frontend AJAX language context** — standard `admin-ajax.php` handlers inherit the current frontend language through request parameters, the referring URL, and compatible cookies, in that order, so AJAX started from a page served by a full-page cache still answers in the language on screen
 - **Runtime language switching** — WPML-style `wpml_switch_language` / `$sitepress->switch_lang()` calls temporarily switch WP-LOC's language and WordPress locale, so background handlers and transactional email flows can render content in a user's preferred language
 - **URL structure** — the default language has no prefix; additional languages use `/{slug}/page-slug/`, for example `/en/page-slug/`
 - **Migrated default language** — the migration wizard preserves the legacy multilingual default language for no-prefix URLs
@@ -259,6 +259,8 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 - Compatibility switcher APIs such as `icl_get_languages()` use the same translated URLs as WP-LOC's native switcher helpers
 - Frontend requests persist `wp_loc_current_language`, `wp_loc_current_locale`, `_icl_current_language`, and `wp-wpml_current_language` cookies so same-origin AJAX calls to `admin-ajax.php` keep the expected language context
 - A cookie is only written when its value actually changes. Re-sending an identical cookie would be invisible to the visitor but adds a `Set-Cookie` header, and shared caches treat any response carrying one as personalised — so a CDN would refuse to store it. Since language is resolved from the URL prefix, a returning visitor's requests stay header-clean and remain cacheable at the edge
+- For AJAX, the referring URL is trusted ahead of those cookies. A page served from a full-page cache never runs PHP, so it never sends `Set-Cookie`, and the cookie can still name the language the visitor left one switch ago; the referer always names the page the request actually came from. A same-site referer with no language prefix resolves to the default language, since that is the language served without one. The cookies remain the fallback for requests that arrive with no usable referer, such as under `Referrer-Policy: no-referrer`
+- Language resolution order for AJAX: explicit `lang` request parameter → query var → URL prefix → referring URL → cookies → default language
 
 ## Compatibility Note
 
