@@ -145,6 +145,29 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_db_optimization_scan` — scan existing multilingual data and return wizard summary/mapping data
 - `wp_loc_db_optimization_apply` — apply validated language mapping, adopt compatible data, and clean obsolete service data
 
+## Git workflow (fork)
+
+This checkout is the fork `olegvalko-dev/wp-loc` of the developer's repo `vitaliikaplia/wp-loc` (read-only for us — contributions go through pull requests).
+
+Remotes:
+- `origin` — the fork (push here)
+- `upstream` — the developer's repo (fetch only)
+
+Branch roles:
+- `upstream/master` — the developer's source of truth
+- `master` (fork) — the site branch: upstream + fork commits not yet merged upstream; this is what the site runs
+- `fix/*`, `feat/*` — one logical change per branch, ALWAYS created from `upstream/master`
+
+Contributing a change upstream:
+1. `git fetch upstream`
+2. `git checkout -b fix/<name> upstream/master`
+3. Commit the change, push the branch to `origin`
+4. `gh pr create --repo vitaliikaplia/wp-loc --base master --head olegvalko-dev:fix/<name>`
+5. Need it on the site before the PR is merged? `git checkout master && git cherry-pick <sha> && git push origin master`
+6. After upstream merges/releases: `git fetch upstream && git checkout master && git merge upstream/master` — previously cherry-picked commits resolve cleanly
+
+Never create a PR branch from the fork's `master` and never merge fork `master` into a PR branch — the PR would drag in every fork-only commit. To upstream an older fork-only commit, cherry-pick it onto a fresh branch cut from `upstream/master` and open a separate PR. Delete `fix/*` branches once merged on both sides.
+
 ## Development notes
 - PHP 8.1+ required (uses `str_starts_with`, arrow functions, named arguments)
 - No project npm or webpack workflow — the Mini Prepros PhpStorm plugin watches the project and uses `prepros.config` for SCSS→CSS, JavaScript prepend/concatenation, and minification
