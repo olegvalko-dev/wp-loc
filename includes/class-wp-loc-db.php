@@ -136,6 +136,75 @@ class WP_LOC_DB {
     }
 
     /**
+     * Taxonomy element types whose rows are fully loaded into the object cache
+     * for this request, and how many times each type was primed (writes bust
+     * the primed state, and re-priming is capped to protect write-heavy flows).
+     */
+    private array $primed_taxonomy_types = [];
+    private array $taxonomy_prime_counts = [];
+
+    private const MAX_TAXONOMY_PRIMES_PER_REQUEST = 3;
+
+    /**
+     * Bulk-load every translation row of a taxonomy element type into the
+     * object cache. Term adjustment runs on the get_term filter, so taxonomy
+     * lookups happen hundreds of times per request while taxonomy translation
+     * sets stay small — one query per element type replaces per-term queries.
+     *
+     * Returns true when the element type is fully primed for this request,
+     * which guarantees that a missing trid_/lang_ cache key means "no row".
+     */
+    private function maybe_prime_taxonomy_cache( string $element_type ): bool {
+        if ( ! str_starts_with( $element_type, 'tax_' ) ) {
+            return false;
+        }
+
+        if ( isset( $this->primed_taxonomy_types[ $element_type ] ) ) {
+            return true;
+        }
+
+        $prime_count = $this->taxonomy_prime_counts[ $element_type ] ?? 0;
+
+        if ( $prime_count >= self::MAX_TAXONOMY_PRIMES_PER_REQUEST ) {
+            return false;
+        }
+
+        $this->taxonomy_prime_counts[ $element_type ] = $prime_count + 1;
+        $this->primed_taxonomy_types[ $element_type ] = true;
+
+        global $wpdb;
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT element_id, trid, language_code, source_language_code FROM {$this->table} WHERE element_type = %s",
+            $element_type
+        ) );
+
+        $translations_by_trid = [];
+
+        foreach ( $rows as $row ) {
+            $element_id = (int) $row->element_id;
+            $trid = (int) $row->trid;
+            $language = self::from_db_language_code( $row->language_code ) ?: (string) $row->language_code;
+
+            wp_cache_set( "trid_{$element_type}_{$element_id}", $trid, 'wp_loc' );
+            wp_cache_set( "lang_{$element_type}_{$element_id}", $language, 'wp_loc' );
+
+            $row->element_id = $element_id;
+            $row->language_code = $language;
+            $row->source_language_code = self::from_db_language_code( $row->source_language_code );
+            unset( $row->trid );
+
+            $translations_by_trid[ $trid ][ $language ] = $row;
+        }
+
+        foreach ( $translations_by_trid as $trid => $translations ) {
+            wp_cache_set( "translations_{$trid}", $translations, 'wp_loc' );
+        }
+
+        return true;
+    }
+
+    /**
      * Get trid for an element
      */
     public function get_trid( int $element_id, string $element_type ): ?int {
@@ -144,6 +213,19 @@ class WP_LOC_DB {
 
         if ( $cached !== false ) {
             return $cached ?: null;
+        }
+
+        if ( $this->maybe_prime_taxonomy_cache( $element_type ) ) {
+            $cached = wp_cache_get( $cache_key, 'wp_loc' );
+
+            if ( $cached !== false ) {
+                return $cached ?: null;
+            }
+
+            // The whole element type is primed, so a missing key means "no row".
+            wp_cache_set( $cache_key, 0, 'wp_loc' );
+
+            return null;
         }
 
         global $wpdb;
@@ -166,6 +248,10 @@ class WP_LOC_DB {
      * @return array [ 'ua' => object{element_id, language_code, source_language_code}, ... ]
      */
     public function get_element_translations( int $trid, string $element_type = '' ): array {
+        if ( $element_type ) {
+            $this->maybe_prime_taxonomy_cache( $element_type );
+        }
+
         $cache_key = "translations_{$trid}";
         $cached = wp_cache_get( $cache_key, 'wp_loc' );
 
@@ -221,6 +307,19 @@ class WP_LOC_DB {
 
         if ( $cached !== false ) {
             return $cached ?: null;
+        }
+
+        if ( $this->maybe_prime_taxonomy_cache( $element_type ) ) {
+            $cached = wp_cache_get( $cache_key, 'wp_loc' );
+
+            if ( $cached !== false ) {
+                return $cached ?: null;
+            }
+
+            // The whole element type is primed, so a missing key means "no row".
+            wp_cache_set( $cache_key, '', 'wp_loc' );
+
+            return null;
         }
 
         global $wpdb;
@@ -356,6 +455,7 @@ class WP_LOC_DB {
      * Clear caches for an element
      */
     private function bust_cache( int $element_id, string $element_type, ?int $trid = null ): void {
+        unset( $this->primed_taxonomy_types[ $element_type ] );
         wp_cache_delete( "trid_{$element_type}_{$element_id}", 'wp_loc' );
         wp_cache_delete( "lang_{$element_type}_{$element_id}", 'wp_loc' );
 

@@ -19,6 +19,8 @@ class WP_LOC_Terms {
         add_action( 'edited_term', [ $this, 'sync_term_parent_translations' ], 20, 3 );
         add_action( 'admin_init', [ $this, 'guard_protected_term_deletion' ] );
         add_action( 'admin_init', [ $this, 'normalize_bulk_delete_request' ], 1 );
+        add_action( 'created_term', [ $this, 'flush_term_mapping_cache' ], 1, 3 );
+        add_action( 'delete_term', [ $this, 'flush_term_mapping_cache' ], 1, 3 );
         add_action( 'delete_term', [ $this, 'cascade_delete_term_translations' ], 5, 5 );
         add_action( 'delete_term', [ $this, 'delete_term_language' ], 10, 4 );
 
@@ -31,6 +33,8 @@ class WP_LOC_Terms {
         add_filter( 'get_terms', [ $this, 'sort_admin_terms_by_default_language_name' ], 10, 4 );
         add_filter( 'terms_clauses', [ $this, 'filter_terms_clauses' ], 10, 3 );
         add_filter( 'wp_unique_term_slug', [ $this, 'allow_duplicate_term_slugs' ], 99, 3 );
+        add_filter( 'wp_update_term_parent', [ $this, 'capture_updating_term' ], 10, 3 );
+        add_action( 'edit_terms', [ $this, 'release_updating_term' ], 10, 2 );
         add_filter( 'wp_insert_term_duplicate_term_check', [ $this, 'filter_duplicate_term_check' ], 10, 5 );
         add_filter( 'get_term', [ $this, 'adjust_term_to_current_language' ], 1, 2 );
         add_filter( 'get_edit_term_link', [ $this, 'add_lang_to_edit_term_link' ], 10, 4 );
@@ -134,21 +138,38 @@ class WP_LOC_Terms {
      * Get term_taxonomy_id by term_id.
      */
     public static function get_term_taxonomy_id( int $term_id, string $taxonomy ): ?int {
-        global $wpdb;
+        // WP_Term::get_instance() reads the core term object cache (primed in bulk
+        // by WP_Term_Query) and, unlike get_term(), never fires the 'get_term'
+        // filter, so it is safe to call from adjust_term_to_current_language().
+        $term = \WP_Term::get_instance( $term_id, $taxonomy );
 
-        $term_taxonomy_id = $wpdb->get_var( $wpdb->prepare(
-            "SELECT term_taxonomy_id FROM {$wpdb->term_taxonomy} WHERE term_id = %d AND taxonomy = %s LIMIT 1",
-            $term_id,
-            $taxonomy
-        ) );
-
-        return $term_taxonomy_id ? (int) $term_taxonomy_id : null;
+        return $term instanceof \WP_Term ? (int) $term->term_taxonomy_id : null;
     }
 
     /**
      * Get term_id by term_taxonomy_id.
      */
     public static function get_term_id_from_taxonomy_id( int $term_taxonomy_id, string $taxonomy ): ?int {
+        $cache_key = "term_id_{$taxonomy}_{$term_taxonomy_id}";
+        $cached = wp_cache_get( $cache_key, 'wp_loc' );
+
+        if ( $cached !== false ) {
+            return $cached ?: null;
+        }
+
+        if ( self::prime_term_id_map( $taxonomy ) ) {
+            $cached = wp_cache_get( $cache_key, 'wp_loc' );
+
+            if ( $cached !== false ) {
+                return $cached ?: null;
+            }
+
+            // The whole taxonomy map is primed, so a missing key means "no row".
+            wp_cache_set( $cache_key, 0, 'wp_loc' );
+
+            return null;
+        }
+
         global $wpdb;
 
         $term_id = $wpdb->get_var( $wpdb->prepare(
@@ -157,7 +178,62 @@ class WP_LOC_Terms {
             $taxonomy
         ) );
 
+        wp_cache_set( $cache_key, $term_id ? (int) $term_id : 0, 'wp_loc' );
+
         return $term_id ? (int) $term_id : null;
+    }
+
+    /**
+     * Taxonomies whose term_taxonomy_id → term_id map is fully loaded into the
+     * object cache for this request, and how many times each was primed
+     * (term creation/deletion busts the primed state; re-priming is capped).
+     */
+    private static array $primed_term_id_maps = [];
+    private static array $term_id_map_prime_counts = [];
+
+    private const MAX_TERM_ID_MAP_PRIMES_PER_REQUEST = 3;
+
+    /**
+     * Bulk-load the term_taxonomy_id → term_id map of a taxonomy into the
+     * object cache with one query. Translation lookups resolve this mapping
+     * for hundreds of terms per request via the get_term filter.
+     *
+     * Returns true when the taxonomy map is fully primed for this request.
+     */
+    private static function prime_term_id_map( string $taxonomy ): bool {
+        if ( isset( self::$primed_term_id_maps[ $taxonomy ] ) ) {
+            return true;
+        }
+
+        $prime_count = self::$term_id_map_prime_counts[ $taxonomy ] ?? 0;
+
+        if ( $prime_count >= self::MAX_TERM_ID_MAP_PRIMES_PER_REQUEST ) {
+            return false;
+        }
+
+        self::$term_id_map_prime_counts[ $taxonomy ] = $prime_count + 1;
+        self::$primed_term_id_maps[ $taxonomy ] = true;
+
+        global $wpdb;
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT term_taxonomy_id, term_id FROM {$wpdb->term_taxonomy} WHERE taxonomy = %s",
+            $taxonomy
+        ) );
+
+        foreach ( $rows as $row ) {
+            wp_cache_set( "term_id_{$taxonomy}_{$row->term_taxonomy_id}", (int) $row->term_id, 'wp_loc' );
+        }
+
+        return true;
+    }
+
+    /**
+     * Drop the cached term_taxonomy_id → term_id mapping when a term is created or deleted.
+     */
+    public function flush_term_mapping_cache( $term_id, $term_taxonomy_id, string $taxonomy ): void {
+        unset( self::$primed_term_id_maps[ $taxonomy ] );
+        wp_cache_delete( "term_id_{$taxonomy}_{$term_taxonomy_id}", 'wp_loc' );
     }
 
     /**
@@ -774,6 +850,10 @@ class WP_LOC_Terms {
             }
         }
 
+        if ( ! $lang && self::$updating_term && in_array( self::$updating_term['taxonomy'], $translatable_taxonomies, true ) ) {
+            $lang = self::get_term_language( self::$updating_term['id'], self::$updating_term['taxonomy'] );
+        }
+
         $lang = $lang ?: self::get_context_language();
 
         if ( ! $lang || $lang === 'all' ) {
@@ -908,6 +988,42 @@ class WP_LOC_Terms {
     /**
      * Allow the same term slug in different languages.
      */
+    /**
+     * Term currently being updated by wp_update_term(), as [ id, taxonomy ].
+     *
+     * wp_update_term() checks for a duplicate slug with a raw get_term_by() call that carries no
+     * language context, so programmatic updates (WP-CLI, cron, imports, REST) cannot rely on the
+     * admin request signature that is_term_save_request() looks for. Remembering the term between
+     * `wp_update_term_parent` and `edit_terms` — the two hooks that bracket that check — lets the
+     * language be resolved from the term itself.
+     *
+     * @var array{id:int,taxonomy:string}|array{}
+     */
+    private static $updating_term = [];
+
+    /**
+     * Remember the term being updated, right before wp_update_term() checks for a duplicate slug.
+     *
+     * @param int|string $parent   Parent term ID, passed through untouched.
+     * @param int        $term_id  Term being updated.
+     * @param string     $taxonomy Taxonomy name.
+     * @return int|string
+     */
+    public function capture_updating_term( $parent, $term_id, $taxonomy ) {
+        if ( self::is_translatable( $taxonomy ) ) {
+            self::$updating_term = [ 'id' => (int) $term_id, 'taxonomy' => (string) $taxonomy ];
+        }
+
+        return $parent;
+    }
+
+    /**
+     * Forget the term once the duplicate check is done, so the context never leaks further.
+     */
+    public function release_updating_term( $term_id = 0, $taxonomy = '' ): void {
+        self::$updating_term = [];
+    }
+
     public function allow_duplicate_term_slugs( string $slug, $term, string $original_slug ): string {
         if ( ! is_object( $term ) || empty( $term->taxonomy ) || ! self::is_translatable( $term->taxonomy ) ) {
             return $slug;
@@ -965,7 +1081,11 @@ class WP_LOC_Terms {
             }
         }
 
-        if ( in_array( 'get_term_by', $functions, true ) && ! $this->is_term_save_request() ) {
+        // get_term_by() is normally a raw lookup that must stay language-agnostic. The one
+        // exception is wp_update_term()'s duplicate-slug check: it uses get_term_by() and must
+        // honour per-language slug uniqueness, otherwise a translation can never take a slug its
+        // sibling already holds. self::$updating_term is only set for that check.
+        if ( in_array( 'get_term_by', $functions, true ) && ! $this->is_term_save_request() && ! self::$updating_term ) {
             return true;
         }
 

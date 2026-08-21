@@ -9,6 +9,13 @@ class WP_LOC_Options {
      */
     private static $multilingual_options = [];
 
+    /**
+     * Per-request caches for localized option lookups, flushed whenever a
+     * registered multilingual option (or one of its localized rows) changes.
+     */
+    private static $localized_value_cache = [];
+    private static $page_option_cache = [];
+
     private static function get_language_option_suffixes( string $language ): array {
         $compat_code = WP_LOC_DB::to_db_language_code( $language ) ?: $language;
 
@@ -22,6 +29,12 @@ class WP_LOC_Options {
     }
 
     private static function get_localized_option_value( string $option, string $language ): array {
+        $cache_key = $option . '|' . $language;
+
+        if ( array_key_exists( $cache_key, self::$localized_value_cache ) ) {
+            return self::$localized_value_cache[ $cache_key ];
+        }
+
         global $wpdb;
 
         foreach ( self::get_language_option_suffixes( $language ) as $suffix ) {
@@ -31,11 +44,11 @@ class WP_LOC_Options {
             ) );
 
             if ( $value !== null ) {
-                return [ true, maybe_unserialize( $value ) ];
+                return self::$localized_value_cache[ $cache_key ] = [ true, maybe_unserialize( $value ) ];
             }
         }
 
-        return [ false, null ];
+        return self::$localized_value_cache[ $cache_key ] = [ false, null ];
     }
 
     private static function is_valid_localized_page_option_value( string $option, $value ): bool {
@@ -80,6 +93,25 @@ class WP_LOC_Options {
 
         // Admin: load localized values on settings pages
         add_action( 'current_screen', [ $this, 'filter_admin_options' ] );
+
+        // Keep the per-request lookup caches consistent with option writes
+        add_action( 'added_option', [ $this, 'maybe_flush_runtime_cache' ] );
+        add_action( 'updated_option', [ $this, 'maybe_flush_runtime_cache' ] );
+        add_action( 'deleted_option', [ $this, 'maybe_flush_runtime_cache' ] );
+    }
+
+    /**
+     * Flush the per-request caches when a multilingual option or any of its
+     * localized `{option}_{lang}` rows is added, updated, or deleted.
+     */
+    public function maybe_flush_runtime_cache( string $option ): void {
+        foreach ( array_keys( self::$multilingual_options ) as $registered ) {
+            if ( $option === $registered || str_starts_with( $option, $registered . '_' ) ) {
+                self::$localized_value_cache = [];
+                self::$page_option_cache = [];
+                return;
+            }
+        }
     }
 
     /**
@@ -164,6 +196,16 @@ class WP_LOC_Options {
     }
 
     private function resolve_page_option_for_language( string $option, string $language ): ?int {
+        $cache_key = $option . '|' . $language;
+
+        if ( array_key_exists( $cache_key, self::$page_option_cache ) ) {
+            return self::$page_option_cache[ $cache_key ];
+        }
+
+        return self::$page_option_cache[ $cache_key ] = $this->compute_page_option_for_language( $option, $language );
+    }
+
+    private function compute_page_option_for_language( string $option, string $language ): ?int {
         global $wpdb;
 
         [ $has_localized_value, $localized_value ] = self::get_localized_option_value( $option, $language );
