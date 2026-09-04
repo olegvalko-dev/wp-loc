@@ -146,6 +146,27 @@ class WP_LOC_DB {
     private const MAX_TAXONOMY_PRIMES_PER_REQUEST = 3;
 
     /**
+     * Sentinel stored in the object cache next to the primed rows. The primed
+     * flags live in PHP memory, so a full cache flush (wp_cache_flush(),
+     * WP-CLI batch loops) would drop the data while the flags keep claiming
+     * the type is loaded — and a missing key would then be misread as "no row".
+     */
+    private const CACHE_GENERATION_KEY = 'taxonomy_prime_generation';
+
+    /**
+     * Forget the primed state when the object cache was flushed behind our back.
+     */
+    private function check_cache_generation(): void {
+        if ( wp_cache_get( self::CACHE_GENERATION_KEY, 'wp_loc' ) !== false ) {
+            return;
+        }
+
+        $this->primed_taxonomy_types = [];
+        $this->taxonomy_prime_counts = [];
+        wp_cache_set( self::CACHE_GENERATION_KEY, 1, 'wp_loc' );
+    }
+
+    /**
      * Bulk-load every translation row of a taxonomy element type into the
      * object cache. Term adjustment runs on the get_term filter, so taxonomy
      * lookups happen hundreds of times per request while taxonomy translation
@@ -158,6 +179,8 @@ class WP_LOC_DB {
         if ( ! str_starts_with( $element_type, 'tax_' ) ) {
             return false;
         }
+
+        $this->check_cache_generation();
 
         if ( isset( $this->primed_taxonomy_types[ $element_type ] ) ) {
             return true;

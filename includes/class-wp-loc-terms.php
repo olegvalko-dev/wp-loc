@@ -194,6 +194,27 @@ class WP_LOC_Terms {
     private const MAX_TERM_ID_MAP_PRIMES_PER_REQUEST = 3;
 
     /**
+     * Sentinel stored in the object cache next to the primed maps. The primed
+     * flags live in PHP memory, so a full cache flush (wp_cache_flush(),
+     * WP-CLI batch loops) would drop the data while the flags keep claiming
+     * the map is loaded — and a missing key would then be misread as "no row".
+     */
+    private const CACHE_GENERATION_KEY = 'term_id_map_generation';
+
+    /**
+     * Forget the primed state when the object cache was flushed behind our back.
+     */
+    private static function check_cache_generation(): void {
+        if ( wp_cache_get( self::CACHE_GENERATION_KEY, 'wp_loc' ) !== false ) {
+            return;
+        }
+
+        self::$primed_term_id_maps = [];
+        self::$term_id_map_prime_counts = [];
+        wp_cache_set( self::CACHE_GENERATION_KEY, 1, 'wp_loc' );
+    }
+
+    /**
      * Bulk-load the term_taxonomy_id → term_id map of a taxonomy into the
      * object cache with one query. Translation lookups resolve this mapping
      * for hundreds of terms per request via the get_term filter.
@@ -201,6 +222,8 @@ class WP_LOC_Terms {
      * Returns true when the taxonomy map is fully primed for this request.
      */
     private static function prime_term_id_map( string $taxonomy ): bool {
+        self::check_cache_generation();
+
         if ( isset( self::$primed_term_id_maps[ $taxonomy ] ) ) {
             return true;
         }
