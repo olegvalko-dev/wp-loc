@@ -11,6 +11,8 @@ class WP_LOC_Terms {
     private static bool $syncing_parent = false;
     private static int $query_filter_suspension_depth = 0;
     private static ?string $term_link_lang_override = null;
+    private static ?string $rest_edited_post_language = null;
+    private static bool $rest_edited_post_language_resolved = false;
 
     public function __construct() {
         add_action( 'created_term', [ $this, 'register_term_language' ], 10, 3 );
@@ -261,11 +263,92 @@ class WP_LOC_Terms {
 
     /**
      * Get current language for term context.
+     *
+     * A block-editor REST request belongs to an editing session, so its context is
+     * the edited post's language — exactly what the classic editor gets from the
+     * admin language. Without that branch REST falls into the frontend language
+     * (is_admin() is false there), which is how a translated post's editor ended
+     * up showing the default-language term tree.
      */
     public static function get_context_language(): string {
+        $editor_lang = self::get_rest_edited_post_language();
+
+        if ( $editor_lang ) {
+            return $editor_lang;
+        }
+
         return WP_LOC_Routing::is_frontend_ajax_request() || ! is_admin()
             ? wp_loc_get_current_lang()
             : wp_loc_get_admin_lang();
+    }
+
+    /**
+     * Language of the post whose block editor issued the current REST request.
+     *
+     * Gutenberg loads taxonomy trees over REST, where is_admin() is false, so the
+     * generic context resolved to the FRONTEND language — a translated post's
+     * editor showed the wrong-language term tree, none of the post's real terms
+     * matched a visible checkbox, and the next save submitted an empty set
+     * (the wipe that 1.8.2's sync guard now contains; the classic editor was
+     * never affected because its metabox renders on a real admin screen).
+     * The terms collection request does not carry the post, so it is recovered
+     * from an explicit ?post= arg when present, otherwise from the editor
+     * screen's referer (post.php?post=ID). Returns null outside REST or when no
+     * post context can be recovered — callers then fall back to the old context.
+     *
+     * Memoized: `get_term` runs this once per term, and the answer cannot change
+     * within a request.
+     */
+    private static function get_rest_edited_post_language(): ?string {
+        // REST_REQUEST is defined during dispatch, while term queries also run
+        // earlier in the same request (init and friends). Answering "no editor
+        // context" for those early calls is right, but it must NEVER be cached:
+        // memoizing it poisoned every later call in the request and left the
+        // block editor with the default-language tree again (measured).
+        if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
+            return null;
+        }
+
+        if ( self::$rest_edited_post_language_resolved ) {
+            return self::$rest_edited_post_language;
+        }
+
+        self::$rest_edited_post_language_resolved = true;
+        self::$rest_edited_post_language = null;
+
+        $post_id = 0;
+
+        if ( isset( $_GET['post'] ) && is_numeric( $_GET['post'] ) ) {
+            $post_id = (int) $_GET['post'];
+        }
+
+        if ( ! $post_id ) {
+            $referer = wp_get_referer();
+
+            if ( $referer && str_contains( (string) $referer, 'post.php' ) ) {
+                parse_str( (string) wp_parse_url( (string) $referer, PHP_URL_QUERY ), $referer_args );
+
+                if ( ! empty( $referer_args['post'] ) && is_numeric( $referer_args['post'] ) ) {
+                    $post_id = (int) $referer_args['post'];
+                }
+            }
+        }
+
+        if ( ! $post_id ) {
+            return null;
+        }
+
+        $post = get_post( $post_id );
+
+        if ( ! $post instanceof \WP_Post ) {
+            return null;
+        }
+
+        $lang = WP_LOC::instance()->db->get_element_language( (int) $post->ID, WP_LOC_DB::post_element_type( $post->post_type ) );
+
+        self::$rest_edited_post_language = $lang ?: null;
+
+        return self::$rest_edited_post_language;
     }
 
     /**
@@ -1910,6 +1993,15 @@ class WP_LOC_Terms {
     public function adjust_term_to_current_language( $term, $taxonomy ) {
         if ( self::$adjusting_term || self::$query_filter_suspension_depth > 0 || ! $term instanceof \WP_Term ) return $term;
         if ( is_admin() ) return $term;
+
+        // Block-editor REST requests are an editing session, not frontend output:
+        // the term query is already scoped to the edited post's language, and the
+        // editor must receive the exact terms it asked for. Swapping each term for
+        // its translation here is what made a translated post's category panel show
+        // the default language even once the query itself was scoped correctly —
+        // get_term() re-mapped every row back. The classic editor never adjusts
+        // (is_admin above), so this keeps both editors identical.
+        if ( self::get_rest_edited_post_language() ) return $term;
         if ( ! $taxonomy || ! self::is_translatable( $taxonomy ) ) return $term;
 
         // Never remap while WP builds the {taxonomy}_children hierarchy map
