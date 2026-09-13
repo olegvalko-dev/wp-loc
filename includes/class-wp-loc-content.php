@@ -237,6 +237,27 @@ class WP_LOC_Content {
         if ( ! in_array( $post->post_type, $translatable, true ) ) return;
 
         add_post_meta( $post_id, '_wp_loc_is_new', 1, true );
+
+        // Outside the admin editor (REST, CLI, importers) there is no second save to
+        // wait for: register the language now, without creating translation copies.
+        if ( ! is_admin() && $post->post_status !== 'auto-draft' ) {
+            $this->register_post_language( $post_id, $post, false );
+        }
+    }
+
+    /** Store the post's language (admin-bar language, default outside the admin) and optionally create the copies. */
+    private function register_post_language( int $post_id, \WP_Post $post, bool $create_copies ): void {
+        $db = WP_LOC::instance()->db;
+        $element_type = WP_LOC_DB::post_element_type( $post->post_type );
+
+        if ( $db->get_element_language( $post_id, $element_type ) ) return;
+
+        delete_post_meta( $post_id, '_wp_loc_is_new' );
+        $db->set_element_language( $post_id, $element_type, wp_loc_get_admin_lang() );
+
+        if ( $create_copies && WP_LOC_Admin_Settings::should_auto_create_post_translations() ) {
+            $this->create_translations( $post_id );
+        }
     }
 
     /**
@@ -261,14 +282,7 @@ class WP_LOC_Content {
         $is_new = get_post_meta( $post_id, '_wp_loc_is_new', true );
         if ( ! $is_new ) return;
 
-        delete_post_meta( $post_id, '_wp_loc_is_new' );
-
-        $current_lang = wp_loc_get_admin_lang();
-        $db->set_element_language( $post_id, $element_type, $current_lang );
-
-        if ( WP_LOC_Admin_Settings::should_auto_create_post_translations() ) {
-            $this->create_translations( $post_id );
-        }
+        $this->register_post_language( $post_id, $post, true );
     }
 
     /**

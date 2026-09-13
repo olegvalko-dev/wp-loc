@@ -430,6 +430,17 @@ class WP_LOC_DB {
             $this->bust_cache( $element_id, $element_type, $trid );
         }
 
+        /**
+         * Fires after an element's language (and translation group) has been stored.
+         *
+         * @param int    $element_id           Post ID or term_taxonomy_id.
+         * @param string $element_type         e.g. `post_product`, `tax_product_cat`.
+         * @param string $language_code        Language slug (site slug, e.g. `ua`, not the DB code).
+         * @param int    $trid                 Translation group ID.
+         * @param bool   $is_new               True when the element had no language row before.
+         */
+        do_action( 'wp_loc_element_language_set', $element_id, $element_type, self::from_db_language_code( $language_code ) ?: $language_code, $trid, ! $existing );
+
         return $trid;
     }
 
