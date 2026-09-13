@@ -3290,7 +3290,7 @@ class WP_LOC_ACF {
     /**
      * Resolve the configured translation mode for a field.
      */
-    private function get_translation_mode( array $field ): string {
+    public function get_translation_mode( array $field ): string {
         if ( isset( $field['translation_mode'] ) && in_array( $field['translation_mode'], [ 'none', 'shared', 'copy_once', 'translatable' ], true ) ) {
             return $field['translation_mode'];
         }
