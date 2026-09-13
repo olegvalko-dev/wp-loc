@@ -935,7 +935,7 @@ class WP_LOC_Admin {
             wp_send_json_error( [ 'message' => __( 'Translation post was not found for the selected language.', 'wp-loc' ) ], 404 );
         }
 
-        $translated_title = WP_LOC_AI::translate_content( $source_title, WP_LOC_AI::get_target_language_name( $target_lang ) );
+        $translated_title = WP_LOC_AI::translate_content( $source_title, WP_LOC_AI::get_target_language_name( $target_lang ), $target_lang );
         $translated_title = trim( wp_strip_all_tags( $translated_title ) );
 
         if ( $translated_title === '' ) {

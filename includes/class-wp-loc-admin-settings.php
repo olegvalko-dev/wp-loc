@@ -470,6 +470,7 @@ TWIG;
         return (bool) get_option( self::ENABLE_YOAST_SITEMAP_ALTERNATES_OPTION_KEY, true );
     }
 
+    // `google` is the WordPress AI provider id for Gemini; external engines must not reuse it.
     private static function normalize_ai_engine( string $engine ): string {
         return match ( sanitize_key( $engine ) ) {
             'claude' => 'anthropic',
@@ -478,14 +479,36 @@ TWIG;
         };
     }
 
+    /**
+     * Translation engines registered by add-ons (`id => label`); selectable next to
+     * the WordPress AI providers and routed through `wp_loc_ai_translate_content`.
+     */
+    public static function get_external_ai_engines(): array {
+        $engines = [];
+
+        foreach ( (array) apply_filters( 'wp_loc_ai_engines', [] ) as $id => $label ) {
+            $id = sanitize_key( (string) $id );
+
+            if ( $id !== '' ) {
+                $engines[ $id ] = (string) $label;
+            }
+        }
+
+        return $engines;
+    }
+
     public static function get_ai_engine(): string {
+        $engine = self::normalize_ai_engine( (string) get_option( self::AI_ENGINE_OPTION_KEY, '' ) );
+
+        if ( isset( self::get_external_ai_engines()[ $engine ] ) ) {
+            return $engine;
+        }
+
         $providers = WP_LOC_AI::get_connected_providers();
 
         if ( $providers === [] ) {
             return '';
         }
-
-        $engine = self::normalize_ai_engine( (string) get_option( self::AI_ENGINE_OPTION_KEY, '' ) );
 
         return isset( $providers[ $engine ] ) ? $engine : (string) array_key_first( $providers );
     }
@@ -605,7 +628,9 @@ TWIG;
             $providers = WP_LOC_AI::get_connected_providers();
             $ai_engine = isset( $_POST['wp_loc_ai_engine'] ) ? sanitize_key( (string) $_POST['wp_loc_ai_engine'] ) : '';
 
-            if ( isset( $providers[ $ai_engine ] ) ) {
+            if ( isset( self::get_external_ai_engines()[ $ai_engine ] ) ) {
+                update_option( self::AI_ENGINE_OPTION_KEY, $ai_engine );
+            } elseif ( isset( $providers[ $ai_engine ] ) ) {
                 $models = WP_LOC_AI::get_provider_models( $ai_engine );
                 $ai_model = isset( $_POST['wp_loc_ai_model'] ) ? sanitize_text_field( trim( (string) $_POST['wp_loc_ai_model'] ) ) : '';
 
@@ -688,16 +713,17 @@ TWIG;
         $ai_engines = [];
         $ai_models_by_provider = [];
         $ai_selected_models_by_provider = [];
+        $ai_providers = [];
         $ai_engine = '';
         $ai_model = '';
-        $has_ai_models = false;
 
-        if ( $current_tab === self::TAB_AI && $core_ai_available ) {
-            $ai_engines = WP_LOC_AI::get_connected_providers();
+        if ( $current_tab === self::TAB_AI ) {
+            $ai_providers = WP_LOC_AI::get_connected_providers();
+            $ai_engines = $ai_providers + self::get_external_ai_engines();
             $saved_ai_models = get_option( self::AI_MODELS_OPTION_KEY, [] );
             $saved_ai_models = is_array( $saved_ai_models ) ? $saved_ai_models : [];
 
-            foreach ( array_keys( $ai_engines ) as $provider_id ) {
+            foreach ( array_keys( $ai_providers ) as $provider_id ) {
                 $ai_models_by_provider[ $provider_id ] = WP_LOC_AI::get_provider_models( $provider_id );
                 $saved_model = isset( $saved_ai_models[ $provider_id ] )
                     ? sanitize_text_field( (string) $saved_ai_models[ $provider_id ] )
@@ -705,10 +731,6 @@ TWIG;
                 $ai_selected_models_by_provider[ $provider_id ] = isset( $ai_models_by_provider[ $provider_id ][ $saved_model ] )
                     ? $saved_model
                     : (string) ( array_key_first( $ai_models_by_provider[ $provider_id ] ) ?? '' );
-
-                if ( $ai_models_by_provider[ $provider_id ] !== [] ) {
-                    $has_ai_models = true;
-                }
             }
 
             $ai_engine = self::get_ai_engine();
@@ -968,61 +990,60 @@ TWIG;
                     <div class="wp-loc-settings-section">
                         <?php if ( ! $core_ai_available ) : ?>
                             <div class="notice notice-warning inline">
-                                <p><?php esc_html_e( 'AI translation requires WordPress 7.0 or newer and the official Connectors API.', 'wp-loc' ); ?></p>
+                                <p><?php esc_html_e( 'WordPress AI providers require WordPress 7.0 or newer and the official Connectors API. Engines added by WP-LOC add-ons work without it.', 'wp-loc' ); ?></p>
                             </div>
-                        <?php elseif ( $ai_engines === [] ) : ?>
+                        <?php elseif ( $ai_providers === [] ) : ?>
                             <div class="notice notice-info inline">
-                                <p><?php esc_html_e( 'No connected AI provider was found. Connect and configure an AI provider in WordPress before enabling AI-assisted translation.', 'wp-loc' ); ?></p>
+                                <p><?php esc_html_e( 'No connected AI provider was found. Connect and configure an AI provider in WordPress, or pick an engine added by a WP-LOC add-on.', 'wp-loc' ); ?></p>
                                 <p>
                                     <a class="button" href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>">
                                         <?php esc_html_e( 'Manage WordPress Connectors', 'wp-loc' ); ?>
                                     </a>
                                 </p>
                             </div>
-                        <?php else : ?>
-                            <table class="form-table" role="presentation">
-                                <tr>
-                                    <th scope="row"><label for="wp-loc-ai-engine"><?php esc_html_e( 'Translation Engine', 'wp-loc' ); ?></label></th>
-                                    <td>
-                                        <select id="wp-loc-ai-engine" name="wp_loc_ai_engine">
-                                            <?php foreach ( $ai_engines as $engine_key => $engine_label ) : ?>
-                                                <option value="<?php echo esc_attr( $engine_key ); ?>" <?php selected( $ai_engine, $engine_key ); ?>>
-                                                    <?php echo esc_html( $engine_label ); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <p class="description">
-                                            <?php esc_html_e( 'Only AI providers connected and configured through WordPress are available.', 'wp-loc' ); ?>
-                                            <a href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>"><?php esc_html_e( 'Manage connectors', 'wp-loc' ); ?></a>
-                                        </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th scope="row"><label for="wp-loc-ai-model"><?php esc_html_e( 'Model', 'wp-loc' ); ?></label></th>
-                                    <td>
-                                        <select
-                                            id="wp-loc-ai-model"
-                                            name="wp_loc_ai_model"
-                                            class="wp-loc-ai-model-select"
-                                            data-models="<?php echo esc_attr( wp_json_encode( $ai_models_by_provider ) ); ?>"
-                                            data-selected-models="<?php echo esc_attr( wp_json_encode( $ai_selected_models_by_provider ) ); ?>"
-                                            data-empty-label="<?php esc_attr_e( 'No text-generation models available', 'wp-loc' ); ?>"
-                                            <?php disabled( empty( $ai_models_by_provider[ $ai_engine ] ) ); ?>
-                                        >
-                                            <?php foreach ( $ai_models_by_provider[ $ai_engine ] ?? [] as $model_key => $model_label ) : ?>
-                                                <option value="<?php echo esc_attr( $model_key ); ?>" <?php selected( $ai_model, $model_key ); ?>>
-                                                    <?php echo esc_html( $model_label ); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                            <?php if ( empty( $ai_models_by_provider[ $ai_engine ] ) ) : ?>
-                                                <option value=""><?php esc_html_e( 'No text-generation models available', 'wp-loc' ); ?></option>
-                                            <?php endif; ?>
-                                        </select>
-                                        <p class="description"><?php esc_html_e( 'Available text-generation models are loaded from the selected provider connector.', 'wp-loc' ); ?></p>
-                                    </td>
-                                </tr>
-                            </table>
                         <?php endif; ?>
+                        <table class="form-table" role="presentation">
+                            <tr>
+                                <th scope="row"><label for="wp-loc-ai-engine"><?php esc_html_e( 'Translation Engine', 'wp-loc' ); ?></label></th>
+                                <td>
+                                    <select id="wp-loc-ai-engine" name="wp_loc_ai_engine">
+                                        <?php foreach ( $ai_engines as $engine_key => $engine_label ) : ?>
+                                            <option value="<?php echo esc_attr( $engine_key ); ?>" <?php selected( $ai_engine, $engine_key ); ?>>
+                                                <?php echo esc_html( $engine_label ); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="description">
+                                        <?php esc_html_e( 'AI providers must be connected and configured through WordPress; engines added by WP-LOC add-ons are configured below.', 'wp-loc' ); ?>
+                                        <a href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>"><?php esc_html_e( 'Manage connectors', 'wp-loc' ); ?></a>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="wp-loc-ai-model"><?php esc_html_e( 'Model', 'wp-loc' ); ?></label></th>
+                                <td>
+                                    <select
+                                        id="wp-loc-ai-model"
+                                        name="wp_loc_ai_model"
+                                        class="wp-loc-ai-model-select"
+                                        data-models="<?php echo esc_attr( wp_json_encode( $ai_models_by_provider ) ); ?>"
+                                        data-selected-models="<?php echo esc_attr( wp_json_encode( $ai_selected_models_by_provider ) ); ?>"
+                                        data-empty-label="<?php esc_attr_e( 'No text-generation models available', 'wp-loc' ); ?>"
+                                        <?php disabled( empty( $ai_models_by_provider[ $ai_engine ] ) ); ?>
+                                    >
+                                        <?php foreach ( $ai_models_by_provider[ $ai_engine ] ?? [] as $model_key => $model_label ) : ?>
+                                            <option value="<?php echo esc_attr( $model_key ); ?>" <?php selected( $ai_model, $model_key ); ?>>
+                                                <?php echo esc_html( $model_label ); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                        <?php if ( empty( $ai_models_by_provider[ $ai_engine ] ) ) : ?>
+                                            <option value=""><?php esc_html_e( 'No text-generation models available', 'wp-loc' ); ?></option>
+                                        <?php endif; ?>
+                                    </select>
+                                    <p class="description"><?php esc_html_e( 'Available text-generation models are loaded from the selected provider connector. Not used by add-on engines.', 'wp-loc' ); ?></p>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                 <?php else : ?>
                     <?php do_action( "wp_loc_settings_render_{$current_tab}" ); ?>
@@ -1030,9 +1051,7 @@ TWIG;
 
                 <?php do_action( "wp_loc_settings_fields_{$current_tab}" ); ?>
 
-                <?php if ( $current_tab !== self::TAB_AI || $has_ai_models || has_action( "wp_loc_settings_fields_{$current_tab}" ) ) : ?>
-                    <?php submit_button( __( 'Save', 'wp-loc' ) ); ?>
-                <?php endif; ?>
+                <?php submit_button( __( 'Save', 'wp-loc' ) ); ?>
             </form>
 
             <?php if ( $current_tab === self::TAB_SWITCHER ) : ?>

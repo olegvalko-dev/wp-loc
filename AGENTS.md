@@ -57,6 +57,7 @@ languages/                         → POT template and PO/MO translation files 
 - **Language registry**: `WP_LOC_Language_Registry` is the central mapping source for external codes/locales/display names/flags. Migration and language helpers should use it before adding special-case language logic. It normalizes aliases such as `uk` → `ua` and legacy `iw` → `he`, and supports broad WordPress locale coverage.
 - **Slug vs compatibility code**: URL slugs and compatibility/database language codes are separate. Example: Ukrainian uses URL slug `ua`, locale `uk`, and compatible language code `uk`. DB rows in `icl_translations.language_code` should use the compatible code, while WP-LOC public helpers return internal slugs unless they intentionally mimic WPML APIs.
 - **URL structure**: Default language has no prefix. Additional languages: `/{slug}/page-name/`.
+- **AI engine ids**: `google` is the WordPress AI provider id for Gemini (`normalize_ai_engine()` maps `gemini` → `google`), so add-on engines registered through `wp_loc_ai_engines` must use another id (e.g. `google_translate`). External engines need no WP AI client and are offered even when Connectors are unavailable.
 - **Ukrainian slug**: `uk` locale maps to `ua` slug via `WP_LOC_Languages::$locale_slug_map`. Filterable via `wp_loc_locale_slug_map`.
 - **Admin language**: Cookie-based (`admin_lang` cookie stores WP locale).
 - **No post meta for translations**: Everything goes through `icl_translations`. No `_lang`, no `_translation_group`.
@@ -136,12 +137,15 @@ languages/                         → POT template and PO/MO translation files 
 - `WP_LOC_Terms::get_term_translation()` — get translated `term_id` for a target language
 - `WP_LOC_Terms::get_term_language()` — get the internal language slug assigned to a term
 - `WP_LOC_Terms::get_term_url_for_language()` — build frontend URL for a term translation in a specific language
-- `WP_LOC_AI::translate_content()` — translate formatted content while preserving HTML
+- `WP_LOC_AI::translate_content( $content, $target_lang, $target_slug = '' )` — translate formatted content while preserving HTML; pass the target language slug so external engines can resolve locales without guessing from the display name
+- `WP_LOC_Admin_Settings::get_external_ai_engines()` — `id => label` of engines registered by add-ons; `get_ai_engine()` returns an external id as-is when it is the saved choice
 - `WP_LOC_AI::get_target_language_name()` — normalize a WP-LOC language slug/locale into a stable AI target language label
 - `WP_LOC_Language_Registry::normalize_external_language()` — normalize an external language code/locale/name into WP-LOC code, locale, display name, flag, and confidence
 - `WP_LOC_Language_Registry::wpml_code_from_slug()` — convert an internal WP-LOC slug into the compatible language code used by legacy APIs/DB rows
 - `WP_LOC_Language_Registry::slug_from_wpml_code()` — convert a compatible language code from imported data into the configured WP-LOC URL slug
 - `WP_LOC_Language_Registry::get_language_options()` — registry-backed target list for wizard language mapping controls
+
+- `WP_LOC_ACF::get_translation_mode( array $field ): string` — resolves the effective translation mode (`none|shared|copy_once|translatable`) of an ACF field the same way wp-loc does (field setting → WPML preference → saved per-key/per-name modes → ACFML group default); add-ons use it instead of re-implementing the fallbacks
 
 ### Compat layer (class-wp-loc-compat.php)
 Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` not defined). Provides:
@@ -164,10 +168,13 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_duplicate_translation_group` — enable/disable cloning the translation group during Yoast Duplicate Post copies (default: `true`)
 - `wp_loc_post_translation_created` — action `($new_post_id, $source_post_id, $lang, $source_lang)` after a translation copy of a post is created and linked (auto-create and the `+` button)
 - `wp_loc_term_translation_created` — action `($new_term_id, $source_term_id, $taxonomy, $lang, $source_lang)` after a translation copy of a term is created and linked (auto-create and the `+` button)
+- `wp_loc_element_language_set` — action `($element_id, $element_type, $lang_slug, $trid, $is_new)` after a post/term language row is stored; posts inserted outside the admin editor (REST, CLI, importers) are registered immediately in the admin-bar/default language without creating translation copies
 - `wp_loc_settings_tabs` — filter `slug => label` of the Settings tabs; add-ons append their own tab
 - `wp_loc_settings_render_{$tab}` — action that renders the body of a non-built-in Settings tab (inside the settings `<form>`)
 - `wp_loc_settings_fields_{$tab}` — action to print extra fields at the bottom of any Settings tab (built-in or add-on)
 - `wp_loc_settings_save_{$tab}` — action after the built-in options of a tab are saved; nonce and `manage_options` already verified
+- `wp_loc_ai_engines` — filter `id => label` of external translation engines offered in the AI tab next to the WordPress AI providers (ids are `sanitize_key`'d; never reuse a WP provider id such as `google`)
+- `wp_loc_ai_translate_content` — filter `( null, $content, $target_lang, $target_slug, $engine )` at the top of `WP_LOC_AI::translate_content()`; return a string to translate with an external engine (empty string = failure), `null` to fall through to the LLM prompt
 
 ### AJAX endpoints
 - `wp_loc_create_translation` — create a single translation for a post+language (used by metabox `+` button)

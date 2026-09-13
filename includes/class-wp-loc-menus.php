@@ -319,10 +319,6 @@ class WP_LOC_Menus {
         return WP_LOC_Admin_Settings::should_ai_translate_custom_menu_links();
     }
 
-    private function get_ai_target_language_name( string $target_lang ): string {
-        return WP_LOC_AI::get_target_language_name( $target_lang );
-    }
-
     private function get_custom_menu_item_source_hash( \WP_Post $menu_item ): string {
         return md5(
             wp_json_encode(
@@ -373,7 +369,7 @@ class WP_LOC_Menus {
             return self::$custom_link_translation_cache[ $cache_key ];
         }
 
-        $translated = WP_LOC_AI::translate_content( $value, WP_LOC_Languages::get_display_name( $target_lang ) );
+        $translated = WP_LOC_AI::translate_content( $value, WP_LOC_AI::get_target_language_name( $target_lang ), $target_lang );
         $translated = trim( $translated );
 
         if ( $translated === '' ) {
@@ -505,10 +501,9 @@ class WP_LOC_Menus {
                 $custom_source_hash = $this->get_custom_menu_item_source_hash( $item );
 
                 if ( $translate_custom_links && $this->should_ai_translate_custom_menu_links() ) {
-                    $ai_target_lang = $this->get_ai_target_language_name( $target_lang );
-                    $translated_title = $this->translate_custom_menu_item_field( $translated_title, $ai_target_lang );
-                    $menu_item->attr_title = $this->translate_custom_menu_item_field( (string) $menu_item->attr_title, $ai_target_lang );
-                    $menu_item->description = $this->translate_custom_menu_item_field( (string) $menu_item->description, $ai_target_lang );
+                    $translated_title = $this->translate_custom_menu_item_field( $translated_title, $target_lang );
+                    $menu_item->attr_title = $this->translate_custom_menu_item_field( (string) $menu_item->attr_title, $target_lang );
+                    $menu_item->description = $this->translate_custom_menu_item_field( (string) $menu_item->description, $target_lang );
                 }
             }
 

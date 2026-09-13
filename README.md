@@ -44,6 +44,7 @@ Lightweight multilingual plugin for WordPress.
 - **Localized options** — `blogname`, `blogdescription`, `page_on_front`, `page_for_posts`, plus options registered through `wp_loc_multilingual_options` or compatible `wpml_multilingual_options`, per language and with localized front page / posts page routing
 - **Custom settings page support** — localized options are displayed and saved correctly on WordPress settings pages, including custom submenu pages under Settings that register option names dynamically
 - **AI settings** — detect configured WordPress AI provider connectors, choose an available provider and text-generation model, and enable AI translation for custom menu links during menu sync
+- **External translation engines** — add-ons can register their own engines (`wp_loc_ai_engines` + `wp_loc_ai_translate_content`); they appear in the engine select on **Multilingual > Settings > AI** and drive the same title, term-name, and menu-link translation actions without a WordPress AI connector
 - **Translation workflow settings** — control automatic creation of post, term, and menu translations and enable multilingual behavior for public or custom non-public post types and taxonomies from **Multilingual > Settings > Content Translation**
 - **Sync policy settings** — control taxonomy sync, featured image sync, and shared post-attribute sync for translation groups
 - **Switcher behavior settings** — control whether the frontend switcher shows flags and names, hides the current language, hides untranslated targets, or falls back to language home URLs

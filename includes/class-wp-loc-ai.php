@@ -97,11 +97,15 @@ class WP_LOC_AI {
             return new WP_Error( 'wp_loc_ai_empty_prompt', __( 'The AI prompt is empty.', 'wp-loc' ) );
         }
 
+        $provider_id = WP_LOC_Admin_Settings::get_ai_engine();
+
+        if ( isset( WP_LOC_Admin_Settings::get_external_ai_engines()[ $provider_id ] ) ) {
+            return new WP_Error( 'wp_loc_ai_external_engine', __( 'The selected translation engine only translates content; it cannot answer prompts.', 'wp-loc' ) );
+        }
+
         if ( ! self::is_core_ai_available() ) {
             return new WP_Error( 'wp_loc_ai_client_unavailable', __( 'AI translation requires WordPress 7.0 or newer.', 'wp-loc' ) );
         }
-
-        $provider_id = WP_LOC_Admin_Settings::get_ai_engine();
 
         if ( $provider_id === '' ) {
             return new WP_Error( 'wp_loc_ai_provider_unavailable', __( 'No connected AI provider is available.', 'wp-loc' ) );
@@ -138,7 +142,15 @@ class WP_LOC_AI {
         return $response;
     }
 
-    public static function translate_content( string $content, string $target_lang ): string {
+    public static function translate_content( string $content, string $target_lang, string $target_slug = '' ): string {
+        $engine = WP_LOC_Admin_Settings::get_ai_engine();
+        /** External engines (registered via `wp_loc_ai_engines`) translate here; a string short-circuits the LLM path. */
+        $external = apply_filters( 'wp_loc_ai_translate_content', null, $content, $target_lang, $target_slug, $engine );
+
+        if ( is_string( $external ) ) {
+            return $external;
+        }
+
         $prompt = sprintf(
             'Translate the following content into natural %1$s. The source may be a short CTA, menu label, button text, sentence, or HTML fragment. Always translate the text itself when possible, even if it is very short. Preserve all HTML formatting and structure exactly when it exists. Do not add explanations. Return only the translated result wrapped in <result></result>. Content: %2$s',
             $target_lang,
