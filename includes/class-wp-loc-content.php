@@ -422,9 +422,12 @@ class WP_LOC_Content {
                     'post_password' => $post->post_password,
                 ];
 
-                // Resolve translated parent
+                // Resolve translated parent. The parent may be another post type
+                // (product_variation -> product), so look it up by its own element type.
                 if ( $post->post_parent ) {
-                    $translated_parent = $db->get_element_translation( $post->post_parent, $element_type, $slug );
+                    $parent_type = get_post_type( $post->post_parent );
+                    $parent_element_type = $parent_type ? WP_LOC_DB::post_element_type( $parent_type ) : $element_type;
+                    $translated_parent = $db->get_element_translation( $post->post_parent, $parent_element_type, $slug );
                     $update_data['post_parent'] = $translated_parent ?: $post->post_parent;
                 } else {
                     $update_data['post_parent'] = 0;
