@@ -161,6 +161,7 @@ Only loads when no other multilingual plugin is active (`ICL_SITEPRESS_VERSION` 
 - `wp_loc_default_multilingual_options` — option names to localize
 - `wp_loc_multilingual_options` — action to register an option as multilingual
 - `wp_loc_duplicate_translation_group` — enable/disable cloning the translation group during Yoast Duplicate Post copies (default: `true`)
+- `wp_loc_translation_created` — action `( $translation_id, $source_id, $lang_slug )` fired once a translation draft is fully created (registered in `icl_translations`, source meta and thumbnail copied, slug fixed) — by both the auto-create-on-save flow and the metabox `+` button. Meta is copied **before** the slug-fix `wp_update_post()`, so `save_post` hooks on the registered translation already see the source meta and never end up duplicating a row the copy adds afterwards.
 
 ### AJAX endpoints
 - `wp_loc_create_translation` — create a single translation for a post+language (used by metabox `+` button)

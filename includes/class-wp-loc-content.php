@@ -329,14 +329,10 @@ class WP_LOC_Content {
             // Register in icl_translations
             $db->set_element_language( $duplicate_id, $element_type, $lang_slug, $trid, $current_lang );
 
-            // Fix slug — wp_insert_post may have added "-2" because icl_translations
-            // registration happens after insert; now that language is set, re-apply original slug
-            wp_update_post( [
-                'ID'        => $duplicate_id,
-                'post_name' => $post->post_name,
-            ] );
-
-            // Copy meta
+            // Copy meta — BEFORE the slug-fix save below, so that save_post hooks
+            // which materialize per-post meta on a registered translation (e.g. a
+            // theme's editor-mode flag) already see the source values and do not
+            // write a row of their own that this copy would then duplicate.
             foreach ( $meta as $key => $values ) {
                 if ( str_starts_with( $key, '_wp_loc_' ) ) continue;
                 if ( $key === '_edit_lock' || $key === '_edit_last' ) continue;
@@ -352,6 +348,23 @@ class WP_LOC_Content {
                 $translated_thumb = $db->get_element_translation( (int) $thumbnail_id, $attachment_element_type, $lang_slug );
                 set_post_thumbnail( $duplicate_id, $translated_thumb ?: $thumbnail_id );
             }
+
+            // Fix slug — wp_insert_post may have added "-2" because icl_translations
+            // registration happens after insert; now that language is set, re-apply original slug
+            wp_update_post( [
+                'ID'        => $duplicate_id,
+                'post_name' => $post->post_name,
+            ] );
+
+            /**
+             * Fires once a translation draft is fully created: registered in
+             * icl_translations, with the source post's meta and thumbnail copied.
+             *
+             * @param int    $duplicate_id The new translation post ID.
+             * @param int    $post_id      The source post it was copied from.
+             * @param string $lang_slug    Language slug of the new translation.
+             */
+            do_action( 'wp_loc_translation_created', $duplicate_id, $post_id, $lang_slug );
         }
 
         self::$creating_translations = false;

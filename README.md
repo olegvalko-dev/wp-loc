@@ -130,6 +130,7 @@ do_action( 'wpml_switch_language', 'uk' ); // restore previous/default context w
 
 ### Content editor and lifecycle
 
+- Translation drafts are full copies of the source post (content, excerpt, meta, featured image). Once a draft is fully created — by the auto-create-on-save flow or the metabox `+` button — WP-LOC fires `do_action( 'wp_loc_translation_created', $translation_id, $source_id, $lang_slug )`, so a theme can align per-post state (an editor-mode flag, a layout choice) with the source at the moment the translation is born
 - Post list row actions and Gutenberg/classic editor title controls can translate titles for every post type enabled in **Multilingual > Settings > Content Translation**
 - Term list row actions and term edit controls can translate term names for taxonomies enabled in **Multilingual > Settings > Content Translation**
 - WordPress's native Insert/edit Link modal is scoped to the language of the post currently being edited, including when ACF opens that native dialog
