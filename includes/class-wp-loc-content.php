@@ -25,7 +25,32 @@ class WP_LOC_Content {
             ? WP_LOC_Terms::get_translatable_taxonomies()
             : [];
 
-        return array_values( array_intersect( $post_type_taxonomies, $translatable_taxonomies ) );
+        return self::merge_syncable_taxonomies( $post_type_taxonomies, $translatable_taxonomies, self::get_shared_taxonomies( $post_type ) );
+    }
+
+    /**
+     * Non-translatable taxonomies whose terms are copied to every translation as-is
+     * (e.g. brands: one term set for all languages). Opt-in, empty by default.
+     *
+     * @return string[]
+     */
+    private static function get_shared_taxonomies( string $post_type ): array {
+        return (array) apply_filters( 'wp_loc_synced_shared_taxonomies', [], $post_type );
+    }
+
+    /**
+     * Taxonomies of a post type to sync: the translatable ones plus the shared ones.
+     * A taxonomy that is translatable is never treated as shared.
+     *
+     * @param string[] $post_type_taxonomies
+     * @param string[] $translatable
+     * @param string[] $shared
+     * @return string[]
+     */
+    public static function merge_syncable_taxonomies( array $post_type_taxonomies, array $translatable, array $shared ): array {
+        $shared = array_diff( $shared, $translatable );
+
+        return array_values( array_intersect( $post_type_taxonomies, array_merge( $translatable, $shared ) ) );
     }
 
     /**
@@ -55,6 +80,11 @@ class WP_LOC_Content {
 
         if ( empty( $source_term_ids ) ) {
             return null;
+        }
+
+        // Shared taxonomies have no languages: every translation gets the same terms.
+        if ( ! in_array( $taxonomy, WP_LOC_Terms::get_translatable_taxonomies(), true ) ) {
+            return $source_term_ids;
         }
 
         $target_term_ids = [];
