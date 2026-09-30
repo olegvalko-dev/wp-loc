@@ -739,6 +739,15 @@ class WP_LOC_Admin {
                 echo '<span class="' . $status_class . '">' . $status_label . '</span>';
             }
 
+            /**
+             * Fires at the end of one language row in the Translations meta box.
+             *
+             * @param \WP_Post $post          Post being edited.
+             * @param string   $slug          Language of this row.
+             * @param int      $translated_id Post in that language, 0 when missing.
+             */
+            do_action( 'wp_loc_translation_meta_box_row', $post, $slug, $has_translation ? (int) $translations[ $slug ]->element_id : 0 );
+
             echo '</li>';
         }
         echo '</ul>';
