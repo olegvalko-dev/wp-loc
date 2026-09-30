@@ -751,6 +751,13 @@ class WP_LOC_Admin {
             echo '</li>';
         }
         echo '</ul>';
+
+        /**
+         * Fires after the language list of the Translations meta box.
+         *
+         * @param \WP_Post $post Post being edited.
+         */
+        do_action( 'wp_loc_translation_meta_box_after', $post );
     }
 
     /**
